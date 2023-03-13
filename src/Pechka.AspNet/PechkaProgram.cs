@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,24 +54,14 @@ public class PechkaProgram
                 if (configPath != null)
                     cb.AddJsonFile(configPath);
                 cb
-                    .AddEnvironmentVariables()
+                    .AddEnvironmentVariables(prefix: "ASPNETCORE_")
                     .AddCommandLine(args);
             });
 
         var roles =
             cmdlet ? Array.Empty<string>() : (cmdLineConfig["roles"] ?? "all").Split(',');
         
-        if (roles.Contains("web") || roles.Contains("all"))
-            builder.ConfigureWebHost(web =>
-            {
-                web
-                    .UseStartup(startup)
-                    .ConfigureServices(services =>
-                    {
-                        services.AddTransient<IStartupFilter, PechkaStartupFilter>();
-                    })
-                    .UseKestrel();
-            });
+
 
         builder.ConfigureServices(services =>
         {
@@ -87,7 +76,20 @@ public class PechkaProgram
             services.AddSingleton<TickingServiceManager>();
             services.AddSingleton<ITickingServiceManager>(p => p.GetRequiredService<TickingServiceManager>());
             services.AddSingleton<TsInterop>();
+            services.AddLogging();
         });
+        
+        if (roles.Contains("web") || roles.Contains("all"))
+            builder.ConfigureWebHost(web =>
+            {
+                web
+                    .UseStartup(startup)
+                    .ConfigureServices(services =>
+                    {
+                        services.AddTransient<IStartupFilter, PechkaStartupFilter>();
+                    })
+                    .UseKestrel();
+            });
 
         if (roles.Contains("services") || roles.Contains("all"))
             builder.ConfigureServices(services =>

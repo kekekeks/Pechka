@@ -29,7 +29,7 @@ public abstract class TickingServiceBase
 
                     await Task.Delay(IntervalOverride ?? Interval, lifetime.ApplicationStopping);
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when(lifetime.ApplicationStopping.IsCancellationRequested)
                 {
                     return;
                 }

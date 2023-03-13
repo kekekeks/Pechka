@@ -32,10 +32,8 @@ public static class PechkaAppBuilderExtensions
         {
             var opts = sp.GetRequiredService<DbConfigOptions<TContextManager>>();
             if (opts.Type == DatabaseType.SqlServer)
-                return factory(
-                    new SqlServerDataProvider("app", SqlServerVersion.v2017, SqlServerProvider.MicrosoftDataSqlClient),
-                    opts.ConnectionString);
-            return factory(new PostgreSQLDataProvider(), opts.ConnectionString);
+                return factory(SqlServerTools.GetDataProvider(), opts.ConnectionString);
+            return factory(PostgreSQLTools.GetDataProvider(), opts.ConnectionString);
         });
         if (runMigrations)
         {
