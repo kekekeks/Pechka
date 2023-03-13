@@ -1,7 +1,6 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,7 +54,7 @@ public class PechkaProgram
                 if (configPath != null)
                     cb.AddJsonFile(configPath);
                 cb
-                    .AddEnvironmentVariables()
+                    .AddEnvironmentVariables(prefix: "ASPNETCORE_")
                     .AddCommandLine(args);
             });
 
