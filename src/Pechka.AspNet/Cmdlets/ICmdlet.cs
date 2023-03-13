@@ -14,5 +14,10 @@ namespace Pechka.AspNet.Cmdlets
         protected abstract int Execute(T args);
     }
     
-    
+    public abstract class AsyncCmdletBase<T> : ICmdletExec
+    {
+        public int Execute(object args) => Execute((T) args).Result;
+
+        protected abstract Task<int> Execute(T args);
+    }
 }

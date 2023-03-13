@@ -17,7 +17,7 @@ internal class RuntimeAppInfo
     
     public PechkaConfiguration Config { get; }
 
-    public string GetWebAppRoot() => Config.WebAppRoot ?? Path.Combine(Info.ContentRoot, "webapp");
+    public string GetWebAppRoot() => Path.Combine(Info.ContentRoot, Config.WebAppRoot ?? "webapp");
     public string GetWebAppApiPath() => Path.Combine(GetWebAppRoot(), Config.WebAppApiPath ?? "src/api.ts");
     public string GetWebAppBuildPath() => Path.Combine(GetWebAppRoot(), Config.WebAppBuildPath ?? "build");
 }
