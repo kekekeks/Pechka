@@ -1,0 +1,5 @@
+{
+  "Database": {
+    "ConnectionString": "Server=127.0.0.1;User id=postgres;password=postgres;database=pechka;Include Error Detail=true"
+  }
+}
