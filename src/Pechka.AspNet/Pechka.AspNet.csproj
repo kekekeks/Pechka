@@ -9,7 +9,7 @@
         <PackageReference Include="CommandLineParser" Version="2.8.0" />
         <PackageReference Include="CoreRpc.AspNetCore" Version="0.5.4" />
         <PackageReference Include="Nito.AsyncEx" Version="5.1.0" />
-        <PackageReference Include="linq2db.PostgreSQL" Version="5.0.0" />
+        <PackageReference Include="linq2db.PostgreSQL" Version="4.4.1" />
         <PackageReference Include="Serenity.FluentMigrator.Runner" Version="1.6.904" />
         <None Remove="$(NuGetPackageRoot)linq2db.postgresql/**/*.*" />
     </ItemGroup>
