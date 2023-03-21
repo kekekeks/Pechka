@@ -131,7 +131,8 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
     public int Run()
     {
         ResolveHost();
-        if (CmdletManager.IsCommand(_args)) CmdletManager.Execute(_ => _host, typeof(TAssembly).Assembly, _args);
+        if (CmdletManager.IsCommand(_args))
+            return CmdletManager.Execute(_ => _host, typeof(TAssembly).Assembly, _args);
         _host.Build().Run();
         return 0;
     }
