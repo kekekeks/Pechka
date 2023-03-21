@@ -26,6 +26,7 @@ namespace Pechka.AspNet.Cmdlets
             var configArgs = delimiterIndex == -1 ? Array.Empty<string>() : args.Skip(delimiterIndex + 1).ToArray();
 
             var cmdlets = new Dictionary<Type, Type>();
+
             foreach (var t in typeof(CmdletBase<>).Assembly.GetTypes().Concat(rootAssembly.GetTypes()))
             {
                 if(t.IsAbstract)
@@ -35,11 +36,12 @@ namespace Pechka.AspNet.Cmdlets
                 while (baseType?.BaseType != typeof(object) && baseType != null) 
                     baseType = baseType?.BaseType;
 
-                if (baseType == null || !baseType.IsConstructedGenericType ||
-                    baseType.GetGenericTypeDefinition() != typeof(CmdletBase<>))
+                if (baseType == null || !baseType.IsConstructedGenericType)
                     continue;
 
-                cmdlets.Add(baseType.GetGenericArguments()[0], t);
+                var genericTypeDef = baseType.GetGenericTypeDefinition();
+                if (genericTypeDef == typeof(CmdletBase<>) || genericTypeDef == typeof(AsyncCmdletBase<>))
+                    cmdlets.Add(baseType.GetGenericArguments()[0], t);
             }
 
             var parserResult = Parser.Default.ParseArguments(commandArgs, cmdlets.Keys.ToArray());
