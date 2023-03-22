@@ -112,6 +112,7 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
                     .ConfigureServices(services =>
                     {
                         services.AddTransient<IStartupFilter, PechkaStartupFilter>();
+                        services.AddControllers().AddApplicationPart(typeof(TAssembly).Assembly);
                     })
                     .Configure(_customAppConfigure)
                     .UseKestrel();
