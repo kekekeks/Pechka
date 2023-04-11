@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -8,18 +7,13 @@ namespace Pechka.AspNet;
 internal class RuntimeAppInfo
 {
     public RuntimeProgramInfo Info { get; }
+    public PechkaConfiguration Config { get; }
 
     public RuntimeAppInfo(IServiceProvider provider, RuntimeProgramInfo info)
     {
         Info = info;
         Config = provider.GetService<PechkaConfiguration>() ?? new PechkaConfiguration();
     }
-    
-    public PechkaConfiguration Config { get; }
-
-    public string GetWebAppRoot() => Path.Combine(Info.ContentRoot, Config.WebAppRoot ?? "webapp");
-    public string GetWebAppApiPath() => Path.Combine(GetWebAppRoot(), Config.WebAppApiPath ?? "src/api.ts");
-    public string GetWebAppBuildPath() => Path.Combine(GetWebAppRoot(), Config.WebAppBuildPath ?? "build");
 }
 
 internal class RuntimeProgramInfo

@@ -5,7 +5,6 @@ using CommandLine;
 
 namespace Pechka.AspNet.Cmdlets
 {
-    
     internal class CmdletGenerateTsApi : CmdletBase<CmdletGenerateTsApi.GenerateTsApiOptions>
     {
         private readonly RuntimeAppInfo _info;
@@ -24,12 +23,12 @@ namespace Pechka.AspNet.Cmdlets
 
         protected override int Execute(GenerateTsApiOptions args)
         {
-            var devJsRoot = Path.Combine(Directory.GetCurrentDirectory(), "Frontend/packages/corerpc-api");
-            if (!Directory.Exists(devJsRoot)) return -1;
-            
-            File.WriteAllText(Path.Combine(devJsRoot, "api.ts"), _interop.GenerateTsRpc());
+            var apits = Path.Combine(_info.Info.ContentRoot, _info.Config.WebAppApiPath);
+            var folder = Path.GetDirectoryName(apits);
+            if (!Directory.Exists(folder)) return -1;
+
+            File.WriteAllText(apits, _interop.GenerateTsRpc());
             Console.WriteLine("api.ts created!");
-            Environment.Exit(0);
             return 0;
         }
     }
