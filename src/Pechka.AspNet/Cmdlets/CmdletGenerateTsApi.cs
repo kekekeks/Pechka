@@ -25,7 +25,10 @@ namespace Pechka.AspNet.Cmdlets
         protected override int Execute(GenerateTsApiOptions args)
         {
             // NOTE: Maybe just throw exception here?
-            var apiPath = _info.Config.WebAppApiPath ?? "Frontend/packages/corerpc-api/api.ts";
+            var apiPath = _info.Config is { WebAppRoot: not null, WebAppApiPath: not null }
+                ? Path.Combine(_info.Config.WebAppRoot, _info.Config.WebAppApiPath)
+                : "Frontend/packages/corerpc-api/api.ts";
+            
             var devJsRoot = Path.Combine(Directory.GetCurrentDirectory(), apiPath);
             var targetDirectory = Path.GetDirectoryName(devJsRoot);
             

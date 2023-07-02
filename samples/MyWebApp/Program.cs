@@ -7,8 +7,8 @@ void ConfigureServices(IConfiguration configuration, IServiceCollection services
     services.AddSingleton(new PechkaConfiguration()
     {
         WebAppRoot = "webapp",
-        WebAppApiPath = "webapp/src/api.ts",
-        WebAppBuildPath = "webapp/build"
+        WebAppApiPath = "src/api.ts",
+        WebAppBuildPath = "build"
     });
     services.AddControllers();
     services.AddDbContextManager((dp, c) => new MyDbContextManager(dp, c));
