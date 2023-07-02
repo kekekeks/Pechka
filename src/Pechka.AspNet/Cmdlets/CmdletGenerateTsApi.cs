@@ -24,12 +24,22 @@ namespace Pechka.AspNet.Cmdlets
 
         protected override int Execute(GenerateTsApiOptions args)
         {
-            var devJsRoot = Path.Combine(Directory.GetCurrentDirectory(), "Frontend/packages/corerpc-api");
-            if (!Directory.Exists(devJsRoot)) return -1;
+            // NOTE: Maybe just throw exception here?
+            var apiPath = _info.Config is { WebAppRoot: not null, WebAppApiPath: not null }
+                ? Path.Combine(_info.Config.WebAppRoot, _info.Config.WebAppApiPath)
+                : "Frontend/packages/corerpc-api/api.ts";
             
-            File.WriteAllText(Path.Combine(devJsRoot, "api.ts"), _interop.GenerateTsRpc());
+            var devJsRoot = Path.Combine(Directory.GetCurrentDirectory(), apiPath);
+            var targetDirectory = Path.GetDirectoryName(devJsRoot);
+            
+            if (!Directory.Exists(targetDirectory))
+            {
+                Console.WriteLine($"Target directory {targetDirectory} doesn't exist! Check your PechkaConfiguration -> WebAppApiPath");
+                return 1;
+            }
+            
+            File.WriteAllText(Path.Combine(devJsRoot), _interop.GenerateTsRpc());
             Console.WriteLine("api.ts created!");
-            Environment.Exit(0);
             return 0;
         }
     }
