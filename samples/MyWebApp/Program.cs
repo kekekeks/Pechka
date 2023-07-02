@@ -4,6 +4,12 @@ using Pechka.AspNet;
 
 void ConfigureServices(IConfiguration configuration, IServiceCollection services)
 {
+    services.AddSingleton(new PechkaConfiguration()
+    {
+        WebAppRoot = "webapp",
+        WebAppApiPath = "webapp/src/api.ts",
+        WebAppBuildPath = "webapp/build"
+    });
     services.AddControllers();
     services.AddDbContextManager((dp, c) => new MyDbContextManager(dp, c));
 }
