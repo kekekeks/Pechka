@@ -4,11 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using CoreRPC;
-using CoreRPC.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Options;
 using Pechka.AspNet.Database;
 
 namespace Pechka.AspNet;
@@ -33,11 +31,16 @@ class PechkaStartupFilter : IStartupFilter
     {
         if (_info.Info.IsRunningFromSource)
         {
-         
-            var dist = _info.GetWebAppBuildPath();
-            Directory.CreateDirectory(dist);
-            app.UseStaticFiles(new StaticFileOptions
-                {FileProvider = new PhysicalFileProvider(dist), RequestPath = ""});
+            foreach (var webApp in _info.Config.WebAppPaths)
+            {
+                var dist = Path.Combine(_info.Info.ContentRoot, webApp.WebAppBuildPath);
+                Directory.CreateDirectory(dist);
+                app.UseStaticFiles(new StaticFileOptions
+                {
+                    FileProvider = new PhysicalFileProvider(dist),
+                    RequestPath = webApp.WebAppPrefix,
+                });
+            }
         }
 
         app.UseStaticFiles(); // for wwwroot
@@ -45,9 +48,11 @@ class PechkaStartupFilter : IStartupFilter
     
     public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
     {
-        
-        if (_info.Info.IsRunningFromSource) 
-            File.WriteAllText(_info.GetWebAppApiPath(), _interop.GenerateTsRpc());
+        if (_info.Info.IsRunningFromSource)
+        {
+            var apits = Path.Combine(_info.Info.ContentRoot, _info.Config.WebAppApiPath);
+            File.WriteAllText(apits, _interop.GenerateTsRpc());
+        }
         
         return app =>
         {
