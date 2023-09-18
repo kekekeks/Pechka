@@ -100,7 +100,7 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
             var pechkaConfig = _customServicesConfigure(ctx.Configuration, services);
             services.AddSingleton(pechkaConfig);
             var pechkaJsonConfig = ctx.Configuration.GetSection("Pechka").Get<PechkaJsonConfig>();
-            services.AddSingleton(pechkaJsonConfig);
+            services.AddSingleton(pechkaJsonConfig ?? new());
             services.AddSingleton<CustomForwardedHeadersMiddleware>();
         });
         
