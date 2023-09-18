@@ -6,6 +6,7 @@ using System.Text;
 using CoreRPC;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.FileProviders;
 using Pechka.AspNet.Database;
 
@@ -56,7 +57,11 @@ class PechkaStartupFilter : IStartupFilter
         
         return app =>
         {
-            app.UseForwardedHeaders();
+            if (_info.Config.AutoSetupForwardedHeaders)
+                app.UseForwardedHeaders(new ForwardedHeadersOptions
+                {
+                    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+                });
             if(_info.Info.IsRunningFromSource)
                 app.UseCors(x => x
                     .AllowAnyMethod()
