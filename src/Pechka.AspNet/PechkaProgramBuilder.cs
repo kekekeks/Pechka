@@ -1,10 +1,12 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Pechka.AspNet.BackgroundServices;
@@ -25,7 +27,7 @@ public interface IPechkaProgramBuilderWithServices
 
 public interface IPechkaProgramBuilderMain
 {
-    IPechkaProgramBuilderWithServices ConfigureServices(Action<IConfiguration, IServiceCollection> f);
+    IPechkaProgramBuilderWithServices ConfigureServices(Func<IConfiguration, IServiceCollection, PechkaConfiguration> f);
 }
 
 public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechkaProgramBuilderWithServices, IPechkaProgramBuilderExecutable
@@ -33,7 +35,7 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
     private readonly IHostBuilder _host;
     private readonly IConfiguration _configuration;
     private readonly string[] _args;
-    private Action<IConfiguration, IServiceCollection> _customServicesConfigure;
+    private Func<IConfiguration, IServiceCollection, PechkaConfiguration> _customServicesConfigure;
     private Action<WebHostBuilderContext, IApplicationBuilder> _customAppConfigure;
     private Action<IHostBuilder, IConfiguration>? _customization;
 
@@ -93,7 +95,20 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
             services.AddSingleton<TsInterop>();
             services.AddLogging();
             
-            _customServicesConfigure(ctx.Configuration, services);
+            
+            var pechkaConfig = _customServicesConfigure(ctx.Configuration, services);
+            services.AddSingleton(pechkaConfig);
+            var pechkaJsonConfig = ctx.Configuration.GetSection("Pechka").Get<PechkaJsonConfig>();
+            if (pechkaConfig.AutoSetupForwardedHeaders)
+            {
+                if (pechkaJsonConfig?.Http?.ValidProxies != null)
+                {
+                    var opts = new ForwardedHeadersOptions();
+                    foreach (var p in pechkaJsonConfig.Http.ValidProxies)
+                        opts.KnownProxies.Add(IPAddress.Parse(p));
+                }
+            }
+
         });
         
         ResolveRoles();
@@ -138,7 +153,7 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
         return 0;
     }
 
-    public IPechkaProgramBuilderWithServices ConfigureServices(Action<IConfiguration, IServiceCollection> f)
+    public IPechkaProgramBuilderWithServices ConfigureServices(Func<IConfiguration, IServiceCollection, PechkaConfiguration> f)
     {
         _customServicesConfigure = f;
         return this;
