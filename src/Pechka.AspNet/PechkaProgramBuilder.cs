@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -99,16 +100,8 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
             var pechkaConfig = _customServicesConfigure(ctx.Configuration, services);
             services.AddSingleton(pechkaConfig);
             var pechkaJsonConfig = ctx.Configuration.GetSection("Pechka").Get<PechkaJsonConfig>();
-            if (pechkaConfig.AutoSetupForwardedHeaders)
-            {
-                if (pechkaJsonConfig?.Http?.ValidProxies != null)
-                {
-                    var opts = new ForwardedHeadersOptions();
-                    foreach (var p in pechkaJsonConfig.Http.ValidProxies)
-                        opts.KnownProxies.Add(IPAddress.Parse(p));
-                }
-            }
-
+            services.AddSingleton(pechkaJsonConfig);
+            services.AddSingleton<CustomForwardedHeadersMiddleware>();
         });
         
         ResolveRoles();

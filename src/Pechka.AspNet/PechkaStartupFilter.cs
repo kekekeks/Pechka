@@ -58,10 +58,7 @@ class PechkaStartupFilter : IStartupFilter
         return app =>
         {
             if (_info.Config.AutoSetupForwardedHeaders)
-                app.UseForwardedHeaders(new ForwardedHeadersOptions
-                {
-                    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-                });
+                app.UseMiddleware<CustomForwardedHeadersMiddleware>();
             if(_info.Info.IsRunningFromSource)
                 app.UseCors(x => x
                     .AllowAnyMethod()
