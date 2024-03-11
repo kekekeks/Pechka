@@ -20,6 +20,7 @@ public class PechkaConfiguration
 
     public Action<TypescriptGenerationOptions>? TypescriptGenerationOptions { get; set; }
     public bool AutoSetupForwardedHeaders { get; set; } = true;
+    public bool DisableTsApiGeneration { get; set; }
 }
 
 public class PechkaWebAppConfiguration

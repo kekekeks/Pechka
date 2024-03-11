@@ -49,7 +49,7 @@ class PechkaStartupFilter : IStartupFilter
     
     public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
     {
-        if (_info.Info.IsRunningFromSource)
+        if (_info.Info.IsRunningFromSource && !_info.Config.DisableTsApiGeneration)
         {
             var apits = Path.Combine(_info.Info.ContentRoot, _info.Config.WebAppApiPath);
             File.WriteAllText(apits, _interop.GenerateTsRpc());
