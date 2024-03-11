@@ -90,7 +90,7 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
                 ContentRoot = appDirectory,
                 RootAssembly = appAssembly
             });
-            new ServiceRunnerRegistry(appAssembly).Register(services);
+            
             services.AddSingleton<TickingServiceManager>();
             services.AddSingleton<ITickingServiceManager>(p => p.GetRequiredService<TickingServiceManager>());
             services.AddSingleton<TsInterop>();
@@ -100,6 +100,7 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
             var pechkaConfig = _customServicesConfigure(ctx.Configuration, services);
             services.AddSingleton(pechkaConfig);
             var pechkaJsonConfig = ctx.Configuration.GetSection("Pechka").Get<PechkaJsonConfig>();
+            new ServiceRunnerRegistry(appAssembly).Register(services);
             services.AddSingleton(pechkaJsonConfig ?? new());
             services.AddSingleton<CustomForwardedHeadersMiddleware>();
         });
