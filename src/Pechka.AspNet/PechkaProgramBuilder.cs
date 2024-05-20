@@ -34,8 +34,7 @@ public interface IPechkaProgramBuilderMain
 public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechkaProgramBuilderWithServices, IPechkaProgramBuilderExecutable
 {
     private readonly IHostBuilder _host;
-    private readonly IConfiguration _configuration;
-    private readonly string[] _args;
+    private readonly string[] _originalArgs;
     private Func<IConfiguration, IServiceCollection, PechkaConfiguration> _customServicesConfigure;
     private Action<WebHostBuilderContext, IApplicationBuilder> _customAppConfigure;
     private Action<IHostBuilder, IConfiguration>? _customization;
@@ -45,16 +44,15 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
     
     internal PechkaProgramBuilder(string[] args)
     {
-        _configuration = new ConfigurationBuilder().AddCommandLine(args).Build();
         _host = Host.CreateDefaultBuilder();
-        _args = args;
+        _originalArgs = args;
     }
 
-    private void ResolveHost()
+    private void ResolveHost(string[] args)
     {
         var runningFromSources = File.Exists(Path.Combine("obj", "project.assets.json"));
         var appDirectory = runningFromSources ? Directory.GetCurrentDirectory() : AppDomain.CurrentDomain.BaseDirectory;
-        var cmdLineConfig = _configuration;
+        var cmdLineConfig =  new ConfigurationBuilder().AddCommandLine(args).Build();;
         var appAssembly = typeof(TAssembly).Assembly;
 
         var builder = _host
@@ -78,7 +76,7 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
                     cb.AddJsonFile(configPath);
                 cb
                     .AddEnvironmentVariables(prefix: "ASPNETCORE_")
-                    .AddCommandLine(_args);
+                    .AddCommandLine(args);
             });
 
         builder.ConfigureServices((ctx, services) =>
@@ -104,14 +102,14 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
             services.AddSingleton<CustomForwardedHeadersMiddleware>();
         });
         
-        ResolveRoles();
-        _customization?.Invoke(_host, _configuration);
+        ResolveRoles(cmdLineConfig);
+        _customization?.Invoke(_host, cmdLineConfig);
     }
 
-    private void ResolveRoles()
+    private void ResolveRoles(IConfiguration cmdLineConfig)
     {
-        var roles = CmdletManager.IsCommand(_args) ? 
-            Array.Empty<string>() : (_configuration["roles"] ?? "all").Split(',');
+        var roles = CmdletManager.IsCommand(_originalArgs) ? 
+            Array.Empty<string>() : (cmdLineConfig["roles"] ?? "all").Split(',');
         
         if (roles.Contains("web") || roles.Contains("all"))
             _host.ConfigureWebHost(web =>
@@ -139,9 +137,14 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
 
     public int Run()
     {
-        ResolveHost();
-        if (CmdletManager.IsCommand(_args))
-            return CmdletManager.Execute(_ => _host, typeof(TAssembly).Assembly, _args);
+        if (CmdletManager.IsCommand(_originalArgs))
+            return CmdletManager.Execute(args =>
+            {
+                ResolveHost(args);
+                return _host;
+            }, typeof(TAssembly).Assembly, _originalArgs);
+
+        ResolveHost(_originalArgs);
         _host.Build().Run();
         return 0;
     }
