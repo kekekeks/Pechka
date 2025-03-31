@@ -106,6 +106,7 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
         });
         
         ResolveRoles();
+        _host.UseSystemd();
         _customization?.Invoke(_host, _configuration);
     }
 
