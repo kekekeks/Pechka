@@ -12,6 +12,7 @@
         <PackageReference Include="Nito.AsyncEx" Version="5.1.0" />
         <PackageReference Include="linq2db.PostgreSQL" Version="4.4.1" />
         <PackageReference Include="Serenity.FluentMigrator.Runner" Version="1.6.904" />
+        <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
         <None Remove="$(NuGetPackageRoot)linq2db.postgresql/**/*.*" />
     </ItemGroup>
 
