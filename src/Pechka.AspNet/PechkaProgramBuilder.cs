@@ -59,15 +59,6 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
 
         var builder = _host
             .UseContentRoot(appDirectory)
-            .ConfigureLogging(logging =>
-            {
-                logging.ClearProviders();
-                logging.AddSystemdConsole(opts =>
-                {
-                    opts.UseUtcTimestamp = true;
-                    opts.TimestampFormat = "yyyy-MM-dd HH:mm:ss";
-                });
-            })
             .ConfigureAppConfiguration((hb, cb) =>
             {
                 var configPath = cmdLineConfig["config"];
