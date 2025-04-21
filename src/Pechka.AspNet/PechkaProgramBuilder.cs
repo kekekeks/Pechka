@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Net;
+using LinqToDB.Tools;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -19,6 +20,7 @@ public interface IPechkaProgramBuilderExecutable
 {
     IPechkaProgramBuilderExecutable CustomizeHost(Action<IHostBuilder, IConfiguration> f);
     int Run();
+    IHost CreateHost();
 }
 
 public interface IPechkaProgramBuilderWithServices
@@ -28,6 +30,7 @@ public interface IPechkaProgramBuilderWithServices
 
 public interface IPechkaProgramBuilderMain
 {
+    IPechkaProgramBuilderMain WithConfigCustomization(Action<IConfigurationBuilder> cb);
     IPechkaProgramBuilderWithServices ConfigureServices(Func<IConfiguration, IServiceCollection, PechkaConfiguration> f);
 }
 
@@ -38,6 +41,7 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
     private Func<IConfiguration, IServiceCollection, PechkaConfiguration> _customServicesConfigure;
     private Action<WebHostBuilderContext, IApplicationBuilder> _customAppConfigure;
     private Action<IHostBuilder, IConfiguration>? _customization;
+    private Action<IConfigurationBuilder>? _customConfigBuilder;
 
     public static IPechkaProgramBuilderMain Create(string[] args) => 
         new PechkaProgramBuilder<TAssembly>(args);
@@ -68,6 +72,7 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
                 cb
                     .AddEnvironmentVariables(prefix: "ASPNETCORE_")
                     .AddCommandLine(args);
+                _customConfigBuilder?.Invoke(cb);
             });
 
         builder.ConfigureServices((ctx, services) =>
@@ -128,6 +133,12 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
         return this;
     }
 
+    public IHost CreateHost()
+    {
+        ResolveHost(_originalArgs);
+        return _host.Build();
+    }
+    
     public int Run()
     {
         if (CmdletManager.IsCommand(_originalArgs))
@@ -140,6 +151,12 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
         ResolveHost(_originalArgs);
         _host.Build().Run();
         return 0;
+    }
+
+    public IPechkaProgramBuilderMain WithConfigCustomization(Action<IConfigurationBuilder> cb)
+    {
+        _customConfigBuilder = cb;
+        return this;
     }
 
     public IPechkaProgramBuilderWithServices ConfigureServices(Func<IConfiguration, IServiceCollection, PechkaConfiguration> f)
