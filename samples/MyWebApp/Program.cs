@@ -2,16 +2,14 @@ using MyWebApp;
 using Pechka.AspNet;
 
 
-void ConfigureServices(IConfiguration configuration, IServiceCollection services)
+PechkaConfiguration ConfigureServices(IConfiguration configuration, IServiceCollection services)
 {
-    services.AddSingleton(new PechkaConfiguration()
-    {
-        WebAppRoot = "webapp",
-        WebAppApiPath = "src/api.ts",
-        WebAppBuildPath = "build"
-    });
     services.AddControllers();
-    services.AddDbContextManager((dp, c) => new MyDbContextManager(dp, c));
+    services.AddTransactionalDbContextManager((dp, c) => new MyDbContextManager(dp, c));
+    return new PechkaConfiguration
+    {
+        WebAppApiPath = Path.Combine("webapp", "src", "api.ts"),
+    };
 }
 
 void Configure(WebHostBuilderContext ctx, IApplicationBuilder app)

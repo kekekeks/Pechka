@@ -13,13 +13,13 @@ namespace Pechka.AspNet.Database
 
         protected DbContextManagerBase(Func<TContext> factory) => _factory = factory;
 
-        public void Exec(Action<TContext> cb)
+        public virtual void Exec(Action<TContext> cb)
         {
             using var ctx = _factory();
             cb(ctx);
         }
 
-        public T Exec<T>(Func<TContext, T> cb)
+        public virtual T Exec<T>(Func<TContext, T> cb)
         {
             using var ctx = _factory();
             var rv = cb(ctx);
@@ -28,13 +28,13 @@ namespace Pechka.AspNet.Database
             return rv;
         }
 
-        public async Task<T> ExecAsync<T>(Func<TContext, Task<T>> cb)
+        public virtual async Task<T> ExecAsync<T>(Func<TContext, Task<T>> cb)
         {
             await using var ctx = _factory();
             return await cb(ctx);
         }
 
-        public async Task ExecAsync(Func<TContext, Task> cb)
+        public virtual async Task ExecAsync(Func<TContext, Task> cb)
         {
             await using var ctx = _factory();
             await cb(ctx);
@@ -52,7 +52,7 @@ namespace Pechka.AspNet.Database
             }, isolationLevel, token);
         }
 
-        public async Task<T> WithTransaction<T>(
+        public virtual async Task<T> WithTransaction<T>(
             Func<TContext, Task<T>> action,
             IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
             CancellationToken token = default)

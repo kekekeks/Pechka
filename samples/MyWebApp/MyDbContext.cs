@@ -21,7 +21,7 @@ public class MyDbContext : DataConnection
     }
 }
 
-public class MyDbContextManager : DbContextManagerBase<MyDbContext>
+public class MyDbContextManager : TransactionalDbContextManagerBase<MyDbContext>
 {
     public MyDbContextManager(IDataProvider dataProvider, string connectionString) : base(() =>
         new MyDbContext(dataProvider, connectionString))
