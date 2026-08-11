@@ -71,25 +71,30 @@ class PechkaStartupFilter : IStartupFilter
             next(app);
             _interop.Register(app, _interceptors?.ToList());
             
-            var notFound = Encoding.UTF8.GetBytes("Not found");
-            app.Use((context, next) =>
+            // SPA fallback only when Pechka is asked to serve web apps; with an empty
+            // WebAppPaths the host owns its own routing/fallback story.
+            if (_info.Config.WebAppPaths.Count > 0)
             {
-                if (context.Request.Method.ToUpperInvariant() != "GET"
-                    || context.Request.Path
-                        .ToString()?
-                        .Split('/')
-                        .LastOrDefault()?
-                        .IndexOf('.') >= 0)
+                var notFound = Encoding.UTF8.GetBytes("Not found");
+                app.Use((context, next) =>
                 {
-                    context.Response.StatusCode = 404;
-                    return context.Response.Body.WriteAsync(notFound, 0, notFound.Length);
-                }
+                    if (context.Request.Method.ToUpperInvariant() != "GET"
+                        || context.Request.Path
+                            .ToString()?
+                            .Split('/')
+                            .LastOrDefault()?
+                            .IndexOf('.') >= 0)
+                    {
+                        context.Response.StatusCode = 404;
+                        return context.Response.Body.WriteAsync(notFound, 0, notFound.Length);
+                    }
 
-                context.Request.Path = "/index.html";
-                return next();
-            });
-            
-            StaticFiles(app);
+                    context.Request.Path = "/index.html";
+                    return next();
+                });
+
+                StaticFiles(app);
+            }
             if (_migrationsConfig.Config != null)
                 MigrationRunner.MigrateDb(_migrationsConfig.Config.ConnectionString, _info.Info.RootAssembly,
                     _migrationsConfig.Config.Type);

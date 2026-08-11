@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
     <PropertyGroup>
-        <TargetFramework>net6.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
         <Nullable>enable</Nullable>
         <OutputType>Library</OutputType>
     </PropertyGroup>
@@ -10,10 +10,11 @@
         <PackageReference Include="CoreRpc.AspNetCore" Version="0.5.4" />
         <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="8.0.1" />
         <PackageReference Include="Nito.AsyncEx" Version="5.1.0" />
-        <PackageReference Include="linq2db.PostgreSQL" Version="4.4.1" />
+        <PackageReference Include="linq2db" Version="6.4.0" />
+        <PackageReference Include="Npgsql" Version="9.0.5" />
         <PackageReference Include="Serenity.FluentMigrator.Runner" Version="1.6.904" />
-        <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
-        <None Remove="$(NuGetPackageRoot)linq2db.postgresql/**/*.*" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+        <PackageReference Include="System.Data.SqlClient" Version="4.9.0" />
     </ItemGroup>
 
 </Project>
