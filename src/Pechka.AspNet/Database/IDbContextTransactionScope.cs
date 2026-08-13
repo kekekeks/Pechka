@@ -28,6 +28,13 @@ public interface IDbContextTransactionScope : IAsyncDisposable, IDisposable
 
     /// <summary>Prevents the scope from committing; the scope owner will roll back instead.</summary>
     void SetRollbackOnly();
+
+    /// <summary>
+    /// Registers a callback invoked after the outermost scope completes successfully (the database
+    /// transaction, if one was started, is committed by then). Callbacks are dropped on rollback.
+    /// A callback exception propagates to the CommitAsync caller, so callbacks should not throw.
+    /// </summary>
+    void OnCommitted(Action callback);
 }
 
 /// <summary>

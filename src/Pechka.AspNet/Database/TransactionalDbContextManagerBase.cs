@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading;
@@ -133,6 +134,7 @@ public class TransactionalDbContextManagerBase<TContext> : DbContextManagerBase<
         private IsolationLevel _isolationLevel;
         private int _state;
         private volatile bool _rollbackOnly;
+        private List<Action>? _onCommitted;
 
         public RootScope(TransactionalDbContextManagerBase<TContext> owner, IsolationLevel isolationLevel)
         {
@@ -145,6 +147,28 @@ public class TransactionalDbContextManagerBase<TContext> : DbContextManagerBase<
         public bool IsTransactionStarted => _tx != null;
 
         public void SetRollbackOnly() => _rollbackOnly = true;
+
+        public void OnCommitted(Action callback)
+        {
+            lock (this)
+            {
+                ThrowIfCompleted();
+                (_onCommitted ??= new List<Action>()).Add(callback);
+            }
+        }
+
+        private void RunCommittedCallbacks()
+        {
+            List<Action>? callbacks;
+            lock (this)
+            {
+                callbacks = _onCommitted;
+                _onCommitted = null;
+            }
+            if (callbacks != null)
+                foreach (var cb in callbacks)
+                    cb();
+        }
 
         public void TryUpgradeIsolation(IsolationLevel isolationLevel)
         {
@@ -258,6 +282,7 @@ public class TransactionalDbContextManagerBase<TContext> : DbContextManagerBase<
             if (Interlocked.CompareExchange(ref _state, StateCommitted, StateOpen) != StateOpen)
                 throw new InvalidOperationException("Transaction scope is already completed");
             await FinishAsync(commit: true, token);
+            RunCommittedCallbacks();
         }
 
         public async Task RollbackAsync(CancellationToken token = default)
@@ -356,6 +381,8 @@ public class TransactionalDbContextManagerBase<TContext> : DbContextManagerBase<
         public bool IsTransactionStarted => _root.IsTransactionStarted;
 
         public void SetRollbackOnly() => _root.SetRollbackOnly();
+
+        public void OnCommitted(Action callback) => _root.OnCommitted(callback);
 
         public Task CommitAsync(CancellationToken token = default)
         {

@@ -2,14 +2,20 @@ using CoreRPC.AspNetCore;
 using LinqToDB;
 using LinqToDB.Async;
 using Pechka.AspNet.Database;
+using Pechka.AspNet.Jobs;
 
 namespace MyWebApp;
 
 public class TodoRpc : IHttpContextAwareRpc
 {
     private readonly MyDbContextManager _db;
+    private readonly IBackgroundJobScheduler _jobs;
 
-    public TodoRpc(MyDbContextManager db) => _db = db;
+    public TodoRpc(MyDbContextManager db, IBackgroundJobScheduler jobs)
+    {
+        _db = db;
+        _jobs = jobs;
+    }
 
     Task<object> IHttpContextAwareRpc.OnExecuteRpcCall(HttpContext context, Func<Task<object>> action)
         => action();
@@ -50,4 +56,18 @@ public class TodoRpc : IHttpContextAwareRpc
     [NoTransaction]
     public Task<TodoItem[]> List()
         => _db.ExecAsync(db => db.GetTable<TodoItem>().OrderBy(x => x.Id).ToArrayAsync());
+
+    // The job row is part of the implicit per-call unit of work
+    public Task<long> EnqueueGreeting(string name)
+        => _jobs.Enqueue(new GreetingJob { Name = name });
+
+    // The thrown exception rolls back the whole call, including the enqueued job
+    public async Task<long> EnqueueGreetingFailing(string name)
+    {
+        await _jobs.Enqueue(new GreetingJob { Name = name });
+        throw new InvalidOperationException("Intentional failure, the enqueue above must be rolled back");
+    }
+
+    public Task<long> EnqueueFlaky(string reason)
+        => _jobs.Enqueue(new FlakyJob { Reason = reason });
 }

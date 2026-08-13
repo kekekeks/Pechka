@@ -18,14 +18,17 @@ class PechkaStartupFilter : IStartupFilter
     private readonly TsInterop _interop;
     private readonly IEnumerable<IMethodCallInterceptor> _interceptors;
     private readonly PechkaMigrationInternalConfiguration _migrationsConfig;
+    private readonly IEnumerable<IPechkaMigrationSource> _migrationSources;
 
-    public PechkaStartupFilter(RuntimeAppInfo info, TsInterop interop, 
-        IEnumerable<IMethodCallInterceptor> interceptors, PechkaMigrationInternalConfiguration migrationsConfig)
+    public PechkaStartupFilter(RuntimeAppInfo info, TsInterop interop,
+        IEnumerable<IMethodCallInterceptor> interceptors, PechkaMigrationInternalConfiguration migrationsConfig,
+        IEnumerable<IPechkaMigrationSource> migrationSources)
     {
         _info = info;
         _interop = interop;
         _interceptors = interceptors;
         _migrationsConfig = migrationsConfig;
+        _migrationSources = migrationSources;
     }
     
     void StaticFiles(IApplicationBuilder app)
@@ -96,8 +99,13 @@ class PechkaStartupFilter : IStartupFilter
                 StaticFiles(app);
             }
             if (_migrationsConfig.Config != null)
+            {
+                var sources = _migrationSources.ToList();
                 MigrationRunner.MigrateDb(_migrationsConfig.Config.ConnectionString, _info.Info.RootAssembly,
-                    _migrationsConfig.Config.Type);
+                    _migrationsConfig.Config.Type,
+                    sources.Select(s => s.Assembly).Distinct().ToList(),
+                    sources.SelectMany(s => s.MigrationTypes).Distinct().ToList());
+            }
         };
     }
 }

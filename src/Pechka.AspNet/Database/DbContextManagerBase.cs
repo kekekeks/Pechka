@@ -7,7 +7,7 @@ using LinqToDB.Data;
 
 namespace Pechka.AspNet.Database
 {
-    public class DbContextManagerBase<TContext> where TContext : DataConnection
+    public class DbContextManagerBase<TContext> : IUntypedDbContextManager where TContext : DataConnection
     {
         private readonly Func<TContext> _factory;
 
@@ -33,6 +33,9 @@ namespace Pechka.AspNet.Database
             await using var ctx = _factory();
             return await cb(ctx);
         }
+
+        public Task<T> ExecUntypedAsync<T>(Func<DataConnection, Task<T>> cb)
+            => ExecAsync(ctx => cb(ctx));
 
         public virtual async Task ExecAsync(Func<TContext, Task> cb)
         {

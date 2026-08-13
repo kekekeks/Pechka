@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using FluentMigrator;
 using FluentMigrator.Exceptions;
@@ -19,30 +21,60 @@ namespace Pechka.AspNet.Database
 {
     public static class MigrationRunner
     {
-        public static void MigrateDb(string connectionString, Assembly asm, DatabaseType database)
+        public static void MigrateDb(string connectionString, Assembly asm, DatabaseType database,
+            IReadOnlyList<Assembly>? extraAssemblies = null, IReadOnlyList<Type>? allowedExtraMigrations = null)
         {
             var announcer = new AnnounerWrapper(new ConsoleAnnouncer());
-            var ctx = CreateContext(connectionString, database, announcer, asm);
+            var ctx = CreateContext(connectionString, database, announcer, asm, extraAssemblies,
+                allowedExtraMigrations);
             ctx.Execute();
             if (announcer.Errors.Length != 0)
                 throw new Exception("Failed to migrate: \n" + announcer.Errors);
         }
 
         private static TaskExecutor CreateContext(string connectionString, DatabaseType database, IAnnouncer announcer,
-            Assembly asm)
+            Assembly asm, IReadOnlyList<Assembly>? extraAssemblies, IReadOnlyList<Type>? allowedExtraMigrations)
         {
             var ctx = new RunnerContext(announcer)
             {
                 Database = database.ToString(),
                 Connection = connectionString,
                 Targets = new[] {"self"},
+                TargetAssemblies = extraAssemblies?.ToArray() ?? Array.Empty<Assembly>(),
                 PreviewOnly = false,
                 Namespace = null,
                 NestedNamespaces = true,
                 Task = "migrate",
                 WorkingDirectory = Directory.GetCurrentDirectory()
             };
-            return new TaskExecutor(ctx, new LoaderFactory(asm), new ProcessorFactory(connectionString, database));
+            return new CustomTaskExecutor(ctx, new LoaderFactory(asm), new ProcessorFactory(connectionString, database),
+                asm, allowedExtraMigrations ?? Array.Empty<Type>());
+        }
+
+        private class CustomTaskExecutor : TaskExecutor
+        {
+            private readonly Assembly _rootAssembly;
+            private readonly IReadOnlyList<Type> _allowedExtraMigrations;
+
+            public CustomTaskExecutor(RunnerContext ctx, AssemblyLoaderFactory loaderFactory,
+                MigrationProcessorFactoryProvider processorFactory, Assembly rootAssembly,
+                IReadOnlyList<Type> allowedExtraMigrations)
+                : base(ctx, loaderFactory, processorFactory)
+            {
+                _rootAssembly = rootAssembly;
+                _allowedExtraMigrations = allowedExtraMigrations;
+            }
+
+            protected override void Initialize()
+            {
+                base.Initialize();
+                // Migrations outside the root assembly run only when explicitly allowed, so
+                // optional framework features can ship migrations that stay inert until enabled
+                var conventions = (MigrationConventions)((FluentMigrator.Runner.MigrationRunner)Runner).Conventions;
+                var defaultHook = conventions.TypeIsMigration;
+                conventions.TypeIsMigration = t =>
+                    defaultHook(t) && (t.Assembly == _rootAssembly || _allowedExtraMigrations.Contains(t));
+            }
         }
 
         private class AnnounerWrapper : IAnnouncer
