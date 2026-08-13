@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using LinqToDB;
 using LinqToDB.Async;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Pechka.AspNet.BackgroundServices;
 using Pechka.AspNet.Database;
@@ -19,41 +18,34 @@ namespace Pechka.AspNet.Jobs;
 /// skipped (queue continues) and can be restarted by setting State back to 0 (Pending) in the
 /// database; the same applies to Running rows orphaned by a crash.
 /// </summary>
-internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorkerBase, IHostedService
+internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorkerBase, IPechkaBackgroundWorker
     where TContextManager : class, ITransactionalDbContextManager, IUntypedDbContextManager
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly BackgroundJobRegistry _registry;
     private readonly PechkaBackgroundJobOptions _options;
     private readonly PechkaDbTransactionOptions _txOptions;
-    private readonly IHostApplicationLifetime _lifetime;
-    private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger _logger;
+    private readonly Task _databaseReady;
 
     public BackgroundJobPoller(IServiceScopeFactory scopeFactory, BackgroundJobRegistry registry,
-        PechkaBackgroundJobOptions options, IServiceProvider serviceProvider,
-        IHostApplicationLifetime lifetime, ILoggerFactory loggerFactory)
+        PechkaBackgroundJobOptions options, IServiceProvider serviceProvider, ILoggerFactory loggerFactory)
     {
         _scopeFactory = scopeFactory;
         _registry = registry;
         _options = options;
         _txOptions = serviceProvider.GetService<PechkaDbTransactionOptions>() ?? new PechkaDbTransactionOptions();
-        _lifetime = lifetime;
-        _loggerFactory = loggerFactory;
+        _databaseReady = serviceProvider.GetService<DatabaseReadySignal>()?.Ready ?? Task.CompletedTask;
         _logger = loggerFactory.CreateLogger(GetType());
         Interval = options.PollingInterval;
     }
 
-    public Task StartAsync(CancellationToken cancellationToken)
-    {
-        Start(_lifetime, _loggerFactory);
-        return Task.CompletedTask;
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
     protected override async Task Run(CancellationToken token)
     {
+        // Hosted services can start ticking before the startup migrations have created the
+        // job table; polling it too early would trip the worker's one-minute error backoff
+        await _databaseReady.WaitAsync(token);
+
         while (!token.IsCancellationRequested)
         {
             await using var scope = _scopeFactory.CreateAsyncScope();

@@ -13,6 +13,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Pechka.AspNet.BackgroundServices;
 using Pechka.AspNet.Cmdlets;
+using Pechka.AspNet.Database;
 
 namespace Pechka.AspNet;
 
@@ -106,10 +107,15 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
 
     private void ResolveRoles(IConfiguration cmdLineConfig)
     {
-        var roles = CmdletManager.IsCommand(_originalArgs) ? 
+        var roles = CmdletManager.IsCommand(_originalArgs) ?
             Array.Empty<string>() : (cmdLineConfig["roles"] ?? "all").Split(',');
-        
-        if (roles.Contains("web") || roles.Contains("all"))
+
+        var webRole = roles.Contains("web") || roles.Contains("all");
+        // The web role runs migrations (PechkaStartupFilter) and completes the signal then;
+        // without it the schema is assumed to be managed by another process
+        _host.ConfigureServices(services => services.AddSingleton(new DatabaseReadySignal(!webRole)));
+
+        if (webRole)
             _host.ConfigureWebHost(web =>
             {
                 web
@@ -124,7 +130,10 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
 
         if (roles.Contains("services") || roles.Contains("all"))
             _host.ConfigureServices(services =>
-                services.AddHostedService(p => p.GetRequiredService<TickingServiceManager>()));
+            {
+                services.AddHostedService(p => p.GetRequiredService<TickingServiceManager>());
+                services.AddHostedService<PechkaBackgroundWorkersRunner>();
+            });
     }
 
     public IPechkaProgramBuilderExecutable CustomizeHost(Action<IHostBuilder, IConfiguration> f)

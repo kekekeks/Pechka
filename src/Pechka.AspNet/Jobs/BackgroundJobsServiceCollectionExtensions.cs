@@ -1,7 +1,7 @@
 using System;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+using Pechka.AspNet.BackgroundServices;
 using Pechka.AspNet.Database;
 
 namespace Pechka.AspNet.Jobs;
@@ -29,7 +29,9 @@ public static class BackgroundJobsServiceCollectionExtensions
             services.AddSingleton<BackgroundJobRegistry>();
             services.AddScoped<IBackgroundJobScheduler, BackgroundJobScheduler<TContextManager>>();
             services.AddSingleton<BackgroundJobPoller<TContextManager>>();
-            services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<BackgroundJobPoller<TContextManager>>());
+            // Intent only: the poller is started by PechkaBackgroundWorkersRunner under the "services" role
+            services.AddSingleton<IPechkaBackgroundWorker>(sp =>
+                sp.GetRequiredService<BackgroundJobPoller<TContextManager>>());
             services.AddSingleton<IPechkaMigrationSource>(new PechkaMigrationSource(
                 typeof(PechkaBackgroundJobsMigration).Assembly, new[] { typeof(PechkaBackgroundJobsMigration) }));
         }
