@@ -46,7 +46,11 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        Start(_lifetime, _loggerFactory);
+        // Polling starts once the app is up, not when this hosted service starts: the job table
+        // is created by the migration run, which happens later, in the web host's own start.
+        // A first tick against a missing table would fail and cost the queue a minute of the
+        // ticking base's error backoff.
+        _lifetime.ApplicationStarted.Register(() => Start(_lifetime, _loggerFactory));
         return Task.CompletedTask;
     }
 
