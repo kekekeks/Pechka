@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -25,17 +26,23 @@ internal sealed class PechkaBackgroundWorkersRunner : IHostedService
     private readonly IEnumerable<IPechkaBackgroundWorker> _workers;
     private readonly IHostApplicationLifetime _lifetime;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly IServiceProvider _serviceProvider;
+    private bool _started;
 
     public PechkaBackgroundWorkersRunner(IEnumerable<IPechkaBackgroundWorker> workers,
-        IHostApplicationLifetime lifetime, ILoggerFactory loggerFactory)
+        IHostApplicationLifetime lifetime, ILoggerFactory loggerFactory, IServiceProvider serviceProvider)
     {
         _workers = workers;
         _lifetime = lifetime;
         _loggerFactory = loggerFactory;
+        _serviceProvider = serviceProvider;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        if (_serviceProvider.GetService<PechkaBackgroundOptions>()?.AutoStart == false)
+            return Task.CompletedTask;
+        _started = true;
         foreach (var worker in _workers)
             worker.Start(_lifetime, _loggerFactory);
         return Task.CompletedTask;
@@ -43,6 +50,8 @@ internal sealed class PechkaBackgroundWorkersRunner : IHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        if (!_started)
+            return;
         try
         {
             await Task.WhenAll(_workers.Select(w => w.Completion)).WaitAsync(cancellationToken);

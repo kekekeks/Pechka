@@ -32,6 +32,8 @@ public static class BackgroundJobsServiceCollectionExtensions
             // Intent only: the poller is started by PechkaBackgroundWorkersRunner under the "services" role
             services.AddSingleton<IPechkaBackgroundWorker>(sp =>
                 sp.GetRequiredService<BackgroundJobPoller<TContextManager>>());
+            services.AddSingleton<IBackgroundJobDispatcher>(sp =>
+                sp.GetRequiredService<BackgroundJobPoller<TContextManager>>());
             services.AddSingleton<IPechkaMigrationSource>(new PechkaMigrationSource(
                 typeof(PechkaBackgroundJobsMigration).Assembly, new[] { typeof(PechkaBackgroundJobsMigration) }));
         }

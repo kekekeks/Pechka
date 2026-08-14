@@ -18,9 +18,12 @@ namespace Pechka.AspNet.Jobs;
 /// skipped (queue continues) and can be restarted by setting State back to 0 (Pending) in the
 /// database; the same applies to Running rows orphaned by a crash.
 /// </summary>
-internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorkerBase, IPechkaBackgroundWorker
+internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorkerBase, IPechkaBackgroundWorker,
+    IBackgroundJobDispatcher
     where TContextManager : class, ITransactionalDbContextManager, IUntypedDbContextManager
 {
+    private int _processedCounter;
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly BackgroundJobRegistry _registry;
     private readonly PechkaBackgroundJobOptions _options;
@@ -38,6 +41,13 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
         _databaseReady = serviceProvider.GetService<DatabaseReadySignal>()?.Ready ?? Task.CompletedTask;
         _logger = loggerFactory.CreateLogger(GetType());
         Interval = options.PollingInterval;
+    }
+
+    public async Task<int> RunPendingJobsAsync(CancellationToken token = default)
+    {
+        var before = Volatile.Read(ref _processedCounter);
+        await ForceSync(token);
+        return Volatile.Read(ref _processedCounter) - before;
     }
 
     protected override async Task Run(CancellationToken token)
@@ -67,6 +77,7 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
                 .UpdateAsync(token));
             if (claimed == 0)
                 continue;
+            Interlocked.Increment(ref _processedCounter);
 
             await ExecuteJob(scope.ServiceProvider, manager, row, token);
         }

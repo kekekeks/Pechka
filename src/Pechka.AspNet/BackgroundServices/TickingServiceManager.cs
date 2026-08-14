@@ -54,6 +54,8 @@ namespace Pechka.AspNet.BackgroundServices
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
+            if (_serviceProvider.GetService<PechkaBackgroundOptions>()?.AutoStart == false)
+                return;
             var lifetime = _serviceProvider.GetRequiredService<IHostApplicationLifetime>();
             var logger = _serviceProvider.GetRequiredService<ILoggerFactory>();
             foreach (var st in _serviceTypes)
