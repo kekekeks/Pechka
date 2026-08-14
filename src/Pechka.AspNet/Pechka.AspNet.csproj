@@ -6,6 +6,9 @@
         <OutputType>Library</OutputType>
     </PropertyGroup>
     <ItemGroup>
+        <InternalsVisibleTo Include="Pechka.AspNet.Tests" />
+    </ItemGroup>
+    <ItemGroup>
         <PackageReference Include="CommandLineParser" Version="2.8.0" />
         <PackageReference Include="CoreRpc.AspNetCore" Version="0.5.4" />
         <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="8.0.1" />
