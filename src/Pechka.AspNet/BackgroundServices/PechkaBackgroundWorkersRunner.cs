@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -15,6 +17,7 @@ namespace Pechka.AspNet.BackgroundServices;
 internal interface IPechkaBackgroundWorker
 {
     void Start(IHostApplicationLifetime lifetime, ILoggerFactory loggerFactory);
+    Task Completion { get; }
 }
 
 internal sealed class PechkaBackgroundWorkersRunner : IHostedService
@@ -38,5 +41,16 @@ internal sealed class PechkaBackgroundWorkersRunner : IHostedService
         return Task.CompletedTask;
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.WhenAll(_workers.Select(w => w.Completion)).WaitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            _loggerFactory.CreateLogger<PechkaBackgroundWorkersRunner>()
+                .LogWarning("Some background workers did not stop within the shutdown timeout");
+        }
+    }
 }

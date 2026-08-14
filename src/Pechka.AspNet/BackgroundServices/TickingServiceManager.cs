@@ -63,7 +63,20 @@ namespace Pechka.AspNet.BackgroundServices
             }
         }
 
-        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public async Task StopAsync(CancellationToken cancellationToken)
+        {
+            var completions = _serviceTypes
+                .Select(st => ((TickingServiceBase)_serviceProvider.GetService(st)).Completion);
+            try
+            {
+                await Task.WhenAll(completions).WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                _serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger<TickingServiceManager>()
+                    .LogWarning("Some ticking services did not stop within the shutdown timeout");
+            }
+        }
     }
 
     public interface ITickingServiceManager

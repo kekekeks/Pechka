@@ -27,65 +27,88 @@ public abstract class TickingServiceWorkerBase
         Start(lifetime.ApplicationStopping, loggerFactory);
     }
 
+    /// <summary>
+    /// Completes when the worker loop (including <see cref="Cleanup"/>) has finished after
+    /// cancellation. Hosted-service wrappers await this in StopAsync with the host's shutdown
+    /// token, so a worker that ignores cancellation is abandoned instead of hanging shutdown.
+    /// </summary>
+    public Task Completion { get; private set; } = Task.CompletedTask;
+
     public void Start(CancellationToken cancel, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(GetType());
-        var task = Task.Run(async () =>
+        Completion = Task.Run(async () =>
         {
-            while (!cancel.IsCancellationRequested)
+            try
+            {
+                await RunLoop(cancel, logger);
+            }
+            finally
+            {
                 try
                 {
-                    using (await _lock.LockAsync(cancel))
-                    {
-                        await Run(cancel);
-                    }
-
-
-                    bool expedited;
-                    lock (_currentTickWaitLock)
-                    {
-                        _currentTickWait = new CancellationTokenSource();
-                        expedited = _tickExpedited;
-                        _tickExpedited = false;
-                    }
-                    try
-                    {
-                        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancel, _currentTickWait.Token);
-                        if (!expedited)
-                            await Task.Delay(IntervalOverride ?? Interval, linked.Token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-
-                    }
-                    finally
-                    {
-                        lock (_currentTickWait)
-                        {
-                            _currentTickWait?.Dispose();
-                            _currentTickWait = null;
-                        }
-                    }
-                }
-                catch (OperationCanceledException) when(cancel.IsCancellationRequested)
-                {
-                    try
-                    {
-                        await Cleanup();
-                    }
-                    catch(Exception e)
-                    {
-                        logger.LogError(e, "Error during service cleanup");
-                    }
-                    return;
+                    await Cleanup();
                 }
                 catch (Exception e)
                 {
-                    logger.LogError(e, "Error in a service");
+                    logger.LogError(e, "Error during service cleanup");
+                }
+            }
+        });
+    }
+
+    private async Task RunLoop(CancellationToken cancel, ILogger logger)
+    {
+        while (!cancel.IsCancellationRequested)
+            try
+            {
+                using (await _lock.LockAsync(cancel))
+                {
+                    await Run(cancel);
+                }
+
+                bool expedited;
+                lock (_currentTickWaitLock)
+                {
+                    _currentTickWait = new CancellationTokenSource();
+                    expedited = _tickExpedited;
+                    _tickExpedited = false;
+                }
+                try
+                {
+                    using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancel, _currentTickWait.Token);
+                    if (!expedited)
+                        await Task.Delay(IntervalOverride ?? Interval, linked.Token);
+                }
+                catch (OperationCanceledException)
+                {
+
+                }
+                finally
+                {
+                    lock (_currentTickWaitLock)
+                    {
+                        _currentTickWait?.Dispose();
+                        _currentTickWait = null;
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Error in a service");
+                try
+                {
                     await Task.Delay(IntervalOverride ?? TimeSpan.FromMinutes(1), cancel);
                 }
-        });
-        cancel.Register(() => task.Wait());
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+            }
     }
 
     public async Task ForceSync(CancellationToken token)
