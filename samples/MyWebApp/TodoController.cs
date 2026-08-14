@@ -32,4 +32,15 @@ public class TodoController : ControllerBase
     [NoTransaction]
     public Task<TodoItem[]> List()
         => _db.ExecAsync(db => db.GetTable<TodoItem>().OrderBy(x => x.Id).ToArrayAsync());
+
+    public record FlakyPayload(string Name);
+
+    // Retried at pipeline level by UsePechkaTransactionRetries; the body-bound payload proves
+    // the buffered request body is replayed on the second attempt
+    [HttpPost("flaky")]
+    public async Task<int> FlakyInsert([FromBody] FlakyPayload payload)
+    {
+        await RetryProbe.FailEveryOtherAttempt(_db);
+        return await _db.ExecAsync(db => db.InsertWithInt32IdentityAsync(new TodoItem { Name = payload.Name }));
+    }
 }

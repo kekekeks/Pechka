@@ -1,18 +1,21 @@
 using LinqToDB;
 using Microsoft.Extensions.DependencyInjection;
 using Pechka.AspNet.BackgroundServices;
+using Pechka.AspNet.Database;
 
 namespace MyWebApp;
 
-// Ticking services stay singletons; a scoped transactional manager is obtained
-// by creating a DI scope per tick, with an explicit transaction scope around the work.
+// Ticking services stay singletons; a scoped transactional manager is obtained by creating
+// a DI scope per tick, with a retryable transaction scope around the work.
 public class ExpiredTodoCleanupService : TickingServiceBase
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IRetryableTransactionRunner _runner;
 
-    public ExpiredTodoCleanupService(IServiceScopeFactory scopeFactory)
+    public ExpiredTodoCleanupService(IServiceScopeFactory scopeFactory, IRetryableTransactionRunner runner)
     {
         _scopeFactory = scopeFactory;
+        _runner = runner;
         Interval = TimeSpan.FromSeconds(5);
     }
 
@@ -20,10 +23,8 @@ public class ExpiredTodoCleanupService : TickingServiceBase
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<MyDbContextManager>();
-        await using var tx = db.BeginTransaction();
-        await db.ExecAsync(ctx => ctx.GetTable<TodoItem>()
+        await _runner.ExecuteAsync(db, t => db.ExecAsync(ctx => ctx.GetTable<TodoItem>()
             .Where(x => x.Name == "expired")
-            .DeleteAsync(token));
-        await tx.CommitAsync(token);
+            .DeleteAsync(t)), token: token);
     }
 }

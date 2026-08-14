@@ -55,6 +55,7 @@ public static class PechkaAppBuilderExtensions
             options = new PechkaDbTransactionOptions();
             services.AddSingleton(options);
             services.AddSingleton<IMethodCallInterceptor, TransactionMethodCallInterceptor>();
+            services.AddSingleton<IRetryableTransactionRunner, RetryableTransactionRunner>();
             services.Configure<MvcOptions>(o => o.Filters.Add(typeof(TransactionActionFilter)));
         }
         else

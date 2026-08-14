@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -13,6 +14,8 @@ namespace Pechka.AspNet.Database;
 /// <summary>
 /// Wraps every CoreRPC method call in transaction scopes for all registered transactional
 /// managers: commit on success, rollback on exception. Opt out with [NoTransaction].
+/// With EnableRetries, transient failures re-run the whole call ([NoRetry] to opt out);
+/// note that the RPC target instance is reused across attempts.
 /// </summary>
 internal class TransactionMethodCallInterceptor : IMethodCallInterceptor
 {
@@ -28,21 +31,33 @@ internal class TransactionMethodCallInterceptor : IMethodCallInterceptor
 
     public async Task<object> Intercept(MethodCall call, object context, Func<Task<object>> invoke)
     {
-        if (!_options.InterceptRpcCalls || context is not HttpContext http || HasOptOut(call))
+        if (!_options.InterceptRpcCalls || context is not HttpContext http || HasAttribute<NoTransactionAttribute>(call))
             return await invoke();
         var managers = http.RequestServices.GetServices<ITransactionalDbContextManager>().ToList();
         if (managers.Count == 0)
             return await invoke();
 
-        await using var scopes = TransactionScopeSet.Begin(managers, _options, _logger,
-            $"{call.Method.DeclaringType?.Name}.{call.Method.Name}");
+        var operationName = $"{call.Method.DeclaringType?.Name}.{call.Method.Name}";
+        if (!_options.EnableRetries || HasAttribute<NoRetryAttribute>(call))
+            return await RunAttempt(managers, operationName, invoke);
+        // The invoke delegate re-runs the handler on the same target instance with the same
+        // deserialized arguments, so a rolled-back attempt can be repeated wholesale
+        return await TransactionRetry.ExecuteAsync(_options, _logger, operationName,
+            _ => RunAttempt(managers, operationName, invoke),
+            token: http.RequestAborted);
+    }
+
+    private async Task<object> RunAttempt(List<ITransactionalDbContextManager> managers,
+        string operationName, Func<Task<object>> invoke)
+    {
+        await using var scopes = TransactionScopeSet.Begin(managers, _options, _logger, operationName);
         var rv = await invoke();
         await scopes.CommitAsync();
         return rv;
     }
 
-    private static bool HasOptOut(MethodCall call) =>
-        call.Method.GetCustomAttribute<NoTransactionAttribute>() != null
+    private static bool HasAttribute<TAttribute>(MethodCall call) where TAttribute : Attribute =>
+        call.Method.GetCustomAttribute<TAttribute>() != null
         || (call.Target?.GetType() ?? call.Method.DeclaringType)
-            ?.GetCustomAttribute<NoTransactionAttribute>() != null;
+            ?.GetCustomAttribute<TAttribute>() != null;
 }

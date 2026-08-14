@@ -32,3 +32,23 @@ public class FlakyJobHandler : IBackgroundJobHandler<FlakyJob>
     public Task Execute(FlakyJob job, CancellationToken token)
         => throw new InvalidOperationException($"Flaky job failed intentionally: {job.Reason}");
 }
+
+public class TransientJob
+{
+    public string Name { get; set; } = "";
+}
+
+// Registered with retryTransientFailures: true — the probe's 40001 on the first attempt is
+// retried in-process instead of failing the job.
+public class TransientJobHandler : IBackgroundJobHandler<TransientJob>
+{
+    private readonly MyDbContextManager _db;
+
+    public TransientJobHandler(MyDbContextManager db) => _db = db;
+
+    public async Task Execute(TransientJob job, CancellationToken token)
+    {
+        await RetryProbe.FailEveryOtherAttempt(_db);
+        await _db.ExecAsync(db => db.InsertAsync(new TodoItem { Name = $"transient-{job.Name}" }, token: token));
+    }
+}

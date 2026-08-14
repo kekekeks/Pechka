@@ -1,3 +1,4 @@
+using System.Data;
 using CoreRPC.AspNetCore;
 using LinqToDB;
 using LinqToDB.Async;
@@ -70,4 +71,34 @@ public class TodoRpc : IHttpContextAwareRpc
 
     public Task<long> EnqueueFlaky(string reason)
         => _jobs.Enqueue(new FlakyJob { Reason = reason });
+
+    public Task<long> EnqueueTransient(string name)
+        => _jobs.Enqueue(new TransientJob { Name = name });
+
+    // First attempt hits a 40001 from the probe, the automatic retry succeeds
+    public async Task<int> FlakyInsert(string name)
+    {
+        await RetryProbe.FailEveryOtherAttempt(_db);
+        return await _db.ExecAsync(db => db.InsertWithInt32IdentityAsync(new TodoItem { Name = name }));
+    }
+
+    [NoRetry]
+    public async Task<int> FlakyInsertNoRetry(string name)
+    {
+        await RetryProbe.FailEveryOtherAttempt(_db);
+        return await _db.ExecAsync(db => db.InsertWithInt32IdentityAsync(new TodoItem { Name = name }));
+    }
+
+    // Serializable read-modify-write on a shared row ("counter-N" TodoItem); concurrent calls
+    // conflict with a real 40001 and get transparently retried
+    public Task<int> IncrementCounter() => _db.WithTransaction(async db =>
+    {
+        var row = await db.GetTable<TodoItem>().Where(x => x.Name.StartsWith("counter-")).FirstAsync();
+        var value = int.Parse(row.Name.Substring("counter-".Length)) + 1;
+        await Task.Delay(300);
+        await db.GetTable<TodoItem>().Where(x => x.Id == row.Id)
+            .Set(x => x.Name, $"counter-{value}")
+            .UpdateAsync();
+        return value;
+    }, IsolationLevel.Serializable);
 }

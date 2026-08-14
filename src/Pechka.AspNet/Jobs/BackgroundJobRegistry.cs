@@ -9,14 +9,16 @@ namespace Pechka.AspNet.Jobs;
 
 internal abstract class BackgroundJobRegistration
 {
-    protected BackgroundJobRegistration(string identifier, Type jobType)
+    protected BackgroundJobRegistration(string identifier, Type jobType, bool retryTransientFailures)
     {
         Identifier = identifier;
         JobType = jobType;
+        RetryTransientFailures = retryTransientFailures;
     }
 
     public string Identifier { get; }
     public Type JobType { get; }
+    public bool RetryTransientFailures { get; }
 
     public abstract Task Invoke(IServiceProvider services, string? payload, CancellationToken token);
 }
@@ -24,7 +26,8 @@ internal abstract class BackgroundJobRegistration
 internal sealed class BackgroundJobRegistration<TJob, THandler> : BackgroundJobRegistration
     where THandler : class, IBackgroundJobHandler<TJob>
 {
-    public BackgroundJobRegistration(string identifier) : base(identifier, typeof(TJob))
+    public BackgroundJobRegistration(string identifier, bool retryTransientFailures)
+        : base(identifier, typeof(TJob), retryTransientFailures)
     {
     }
 

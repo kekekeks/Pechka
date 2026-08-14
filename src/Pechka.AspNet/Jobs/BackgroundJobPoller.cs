@@ -83,21 +83,29 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
             await MarkFailed(manager, row.Id, $"No handler registered for job type '{row.Type}'");
             return;
         }
-        try
+        var operationName = $"background job {row.Type}#{row.Id}";
+        async Task<object?> Attempt()
         {
             var managers = services.GetServices<ITransactionalDbContextManager>().ToList();
-            await using (var scopes = TransactionScopeSet.Begin(managers, _txOptions, _logger,
-                             $"background job {row.Type}#{row.Id}"))
-            {
-                await registration.Invoke(services, row.Payload, token);
-                // Joins the unit of work, so completion is atomic with the handler's writes
-                await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
-                    .Where(x => x.Id == row.Id)
-                    .Set(x => x.State, JobState.Completed)
-                    .Set(x => x.FinishedAt, JobTime.UtcNow)
-                    .UpdateAsync(token));
-                await scopes.CommitAsync();
-            }
+            await using var scopes = TransactionScopeSet.Begin(managers, _txOptions, _logger, operationName);
+            await registration.Invoke(services, row.Payload, token);
+            // Joins the unit of work, so completion is atomic with the handler's writes
+            await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
+                .Where(x => x.Id == row.Id)
+                .Set(x => x.State, JobState.Completed)
+                .Set(x => x.FinishedAt, JobTime.UtcNow)
+                .UpdateAsync(token));
+            await scopes.CommitAsync();
+            return null;
+        }
+
+        try
+        {
+            if (registration.RetryTransientFailures)
+                await TransactionRetry.ExecuteAsync(_txOptions, _logger, operationName,
+                    _ => Attempt(), token: token);
+            else
+                await Attempt();
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {

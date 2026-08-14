@@ -44,14 +44,18 @@ public static class BackgroundJobsServiceCollectionExtensions
     /// <summary>
     /// Registers a background job type with its handler. <paramref name="identifier"/> is stored in
     /// the job rows to locate the handler and defaults to the job type's full name.
+    /// <paramref name="retryTransientFailures"/> opts the job into in-process retries of transient
+    /// database failures (per PechkaDbTransactionOptions retry settings) before it is marked Failed;
+    /// leave off for handlers with side effects outside the unit of work.
     /// </summary>
     public static IServiceCollection AddBackgroundJob<TJob, THandler>(this IServiceCollection services,
-        string? identifier = null)
+        string? identifier = null, bool retryTransientFailures = false)
         where THandler : class, IBackgroundJobHandler<TJob>
     {
         services.AddScoped<THandler>();
         services.AddSingleton<BackgroundJobRegistration>(
-            new BackgroundJobRegistration<TJob, THandler>(identifier ?? typeof(TJob).FullName!));
+            new BackgroundJobRegistration<TJob, THandler>(identifier ?? typeof(TJob).FullName!,
+                retryTransientFailures));
         return services;
     }
 }
