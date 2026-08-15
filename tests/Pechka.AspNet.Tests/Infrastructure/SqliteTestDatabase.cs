@@ -63,9 +63,12 @@ public sealed class SqliteTestDatabase : IDisposable
                 CreatedAt TEXT NOT NULL,
                 TakenAt TEXT NULL,
                 FinishedAt TEXT NULL,
+                ExpiresAt TEXT NULL,
                 Error TEXT NULL)
             """);
-        Execute(connection, "CREATE INDEX IX_BackgroundJobs_State_Id ON BackgroundJobs (State, Id)");
+        Execute(connection, "CREATE INDEX IX_BackgroundJobs_State_Type_Id ON BackgroundJobs (State, Type, Id)");
+        Execute(connection, "CREATE INDEX IX_BackgroundJobs_State_FinishedAt ON BackgroundJobs (State, FinishedAt)");
+        Execute(connection, "CREATE INDEX IX_BackgroundJobs_State_ExpiresAt ON BackgroundJobs (State, ExpiresAt)");
     }
 
     public string ConnectionString { get; }

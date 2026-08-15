@@ -12,4 +12,10 @@ public class PechkaBackgroundJobOptions
 
     /// <summary>Successfully completed job rows older than this are deleted; null keeps them forever.</summary>
     public TimeSpan? CompletedJobRetention { get; set; }
+
+    /// <summary>
+    /// Completed and Failed rows whose FinishedAt is older than this are deleted; null disables
+    /// the purge. Pending and Running rows are never purged.
+    /// </summary>
+    public TimeSpan? StaleJobRetention { get; set; } = TimeSpan.FromDays(10);
 }

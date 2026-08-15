@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 
 namespace Pechka.AspNet.Jobs;
@@ -9,6 +10,10 @@ namespace Pechka.AspNet.Jobs;
 /// </summary>
 public interface IBackgroundJobScheduler
 {
-    /// <summary>Enqueues a job and returns its queue id. The job type must be registered via AddBackgroundJob.</summary>
-    Task<long> Enqueue<TJob>(TJob job);
+    /// <summary>
+    /// Enqueues a job and returns its queue id. The job type must be registered via
+    /// AddBackgroundJob. <paramref name="expiresIn"/> overrides the job type's default expiration:
+    /// a job not started within that time is auto-failed.
+    /// </summary>
+    Task<long> Enqueue<TJob>(TJob job, TimeSpan? expiresIn = null);
 }

@@ -35,7 +35,8 @@ public static class BackgroundJobsServiceCollectionExtensions
             services.AddSingleton<IBackgroundJobDispatcher>(sp =>
                 sp.GetRequiredService<BackgroundJobPoller<TContextManager>>());
             services.AddSingleton<IPechkaMigrationSource>(new PechkaMigrationSource(
-                typeof(PechkaBackgroundJobsMigration).Assembly, new[] { typeof(PechkaBackgroundJobsMigration) }));
+                typeof(PechkaBackgroundJobsMigration).Assembly,
+                new[] { typeof(PechkaBackgroundJobsMigration), typeof(PechkaBackgroundJobsMigration2) }));
         }
         else
             options = (PechkaBackgroundJobOptions)existing.ImplementationInstance!;
@@ -49,15 +50,17 @@ public static class BackgroundJobsServiceCollectionExtensions
     /// <paramref name="retryTransientFailures"/> opts the job into in-process retries of transient
     /// database failures (per PechkaDbTransactionOptions retry settings) before it is marked Failed;
     /// leave off for handlers with side effects outside the unit of work.
+    /// <paramref name="expiration"/> sets the default time a job of this type may wait for
+    /// execution before being auto-failed; overridable per enqueue.
     /// </summary>
     public static IServiceCollection AddBackgroundJob<TJob, THandler>(this IServiceCollection services,
-        string? identifier = null, bool retryTransientFailures = false)
+        string? identifier = null, bool retryTransientFailures = false, TimeSpan? expiration = null)
         where THandler : class, IBackgroundJobHandler<TJob>
     {
         services.AddScoped<THandler>();
         services.AddSingleton<BackgroundJobRegistration>(
             new BackgroundJobRegistration<TJob, THandler>(identifier ?? typeof(TJob).FullName!,
-                retryTransientFailures));
+                retryTransientFailures, expiration));
         return services;
     }
 }

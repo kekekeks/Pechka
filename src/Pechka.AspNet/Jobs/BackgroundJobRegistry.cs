@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,16 +10,19 @@ namespace Pechka.AspNet.Jobs;
 
 internal abstract class BackgroundJobRegistration
 {
-    protected BackgroundJobRegistration(string identifier, Type jobType, bool retryTransientFailures)
+    protected BackgroundJobRegistration(string identifier, Type jobType, bool retryTransientFailures,
+        TimeSpan? expiration)
     {
         Identifier = identifier;
         JobType = jobType;
         RetryTransientFailures = retryTransientFailures;
+        Expiration = expiration;
     }
 
     public string Identifier { get; }
     public Type JobType { get; }
     public bool RetryTransientFailures { get; }
+    public TimeSpan? Expiration { get; }
 
     public abstract Task Invoke(IServiceProvider services, string? payload, CancellationToken token);
 }
@@ -26,8 +30,8 @@ internal abstract class BackgroundJobRegistration
 internal sealed class BackgroundJobRegistration<TJob, THandler> : BackgroundJobRegistration
     where THandler : class, IBackgroundJobHandler<TJob>
 {
-    public BackgroundJobRegistration(string identifier, bool retryTransientFailures)
-        : base(identifier, typeof(TJob), retryTransientFailures)
+    public BackgroundJobRegistration(string identifier, bool retryTransientFailures, TimeSpan? expiration = null)
+        : base(identifier, typeof(TJob), retryTransientFailures, expiration)
     {
     }
 
@@ -52,7 +56,11 @@ internal sealed class BackgroundJobRegistry
             if (!_byJobType.TryAdd(r.JobType, r))
                 throw new InvalidOperationException($"Background job type {r.JobType} is registered more than once");
         }
+        KnownIdentifiers = _byIdentifier.Keys.ToArray();
     }
+
+    /// <summary>Identifiers this process has handlers for; the poller only claims matching jobs.</summary>
+    public string[] KnownIdentifiers { get; }
 
     public BackgroundJobRegistration? TryGetByIdentifier(string identifier)
         => _byIdentifier.GetValueOrDefault(identifier);

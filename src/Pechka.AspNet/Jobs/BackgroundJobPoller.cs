@@ -16,7 +16,11 @@ namespace Pechka.AspNet.Jobs;
 /// Running outside of any transaction, then its handler runs in a fresh DI scope wrapped in a
 /// unit of work; completion is committed atomically with the handler's writes. Failed jobs are
 /// skipped (queue continues) and can be restarted by setting State back to 0 (Pending) in the
-/// database; the same applies to Running rows orphaned by a crash.
+/// database; the same applies to Running rows orphaned by a crash (when restarting an expired
+/// job, also clear ExpiresAt or it expires again immediately). Jobs whose identifier has no
+/// handler in this process are never claimed — a node that knows them (e.g. a newer deployment)
+/// picks them up instead. Pending jobs past their ExpiresAt are auto-failed by the maintenance
+/// sweep; terminal rows older than the configured retentions are deleted by it.
 /// </summary>
 internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorkerBase, IPechkaBackgroundWorker,
     IBackgroundJobDispatcher
@@ -61,8 +65,14 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
             await using var scope = _scopeFactory.CreateAsyncScope();
             var manager = scope.ServiceProvider.GetRequiredService<TContextManager>();
 
+            // Jobs with identifiers this process doesn't know (e.g. a newer node's job types
+            // during a rolling deploy) are left Pending for a node that has the handler;
+            // expired jobs are left for the maintenance sweep to fail
+            var known = _registry.KnownIdentifiers;
+            var now = JobTime.UtcNow;
             var row = await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
-                .Where(x => x.State == JobState.Pending)
+                .Where(x => x.State == JobState.Pending && known.Contains(x.Type)
+                            && (x.ExpiresAt == null || x.ExpiresAt > now))
                 .OrderBy(x => x.Id)
                 .FirstOrDefaultAsync(token));
             if (row == null)
@@ -82,7 +92,7 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
             await ExecuteJob(scope.ServiceProvider, manager, row, token);
         }
 
-        await CleanupCompleted(token);
+        await RunMaintenance(token);
     }
 
     private async Task ExecuteJob(IServiceProvider services, TContextManager manager, PechkaJobRow row,
@@ -149,15 +159,36 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
             .Set(x => x.Error, error)
             .UpdateAsync(CancellationToken.None));
 
-    private async Task CleanupCompleted(CancellationToken token)
+    private async Task RunMaintenance(CancellationToken token)
     {
-        if (_options.CompletedJobRetention is not { } retention)
-            return;
         await using var scope = _scopeFactory.CreateAsyncScope();
         var manager = scope.ServiceProvider.GetRequiredService<TContextManager>();
-        var cutoff = JobTime.UtcNow - retention;
-        await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
-            .Where(x => x.State == JobState.Completed && x.FinishedAt < cutoff)
-            .DeleteAsync(token));
+        var now = JobTime.UtcNow;
+
+        // Each write is guarded by an existence check so an idle maintenance pass stays read-only
+        if (await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
+                .AnyAsync(x => x.State == JobState.Pending && x.ExpiresAt < now, token)))
+            await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
+                .Where(x => x.State == JobState.Pending && x.ExpiresAt < now)
+                .Set(x => x.State, JobState.Failed)
+                .Set(x => x.FinishedAt, now)
+                .Set(x => x.Error, "Job expired before execution")
+                .UpdateAsync(token));
+
+        if (_options.CompletedJobRetention is { } completedRetention
+            && await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
+                .AnyAsync(x => x.State == JobState.Completed && x.FinishedAt < now - completedRetention, token)))
+            await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
+                .Where(x => x.State == JobState.Completed && x.FinishedAt < now - completedRetention)
+                .DeleteAsync(token));
+
+        if (_options.StaleJobRetention is { } staleRetention
+            && await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
+                .AnyAsync(x => (x.State == JobState.Completed || x.State == JobState.Failed)
+                               && x.FinishedAt < now - staleRetention, token)))
+            await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
+                .Where(x => (x.State == JobState.Completed || x.State == JobState.Failed)
+                            && x.FinishedAt < now - staleRetention)
+                .DeleteAsync(token));
     }
 }

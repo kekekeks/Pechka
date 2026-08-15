@@ -15,6 +15,11 @@ public class RetryableTestJob
     public string Name { get; set; } = null!;
 }
 
+public class ExpiringTestJob
+{
+    public string Name { get; set; } = null!;
+}
+
 /// <summary>Shared observation point for the test job handlers.</summary>
 public sealed class JobLog
 {
@@ -111,6 +116,15 @@ public sealed class RetryableTestJobHandler : IBackgroundJobHandler<RetryableTes
     public Task Execute(RetryableTestJob job, CancellationToken token) => _executor.Run(job.Name, token);
 }
 
+public sealed class ExpiringTestJobHandler : IBackgroundJobHandler<ExpiringTestJob>
+{
+    private readonly TestJobExecutor _executor;
+
+    public ExpiringTestJobHandler(TestJobExecutor executor) => _executor = executor;
+
+    public Task Execute(ExpiringTestJob job, CancellationToken token) => _executor.Run(job.Name, token);
+}
+
 internal sealed class JobTestHost : IAsyncDisposable
 {
     private JobTestHost(ServiceProvider services, SqliteTestDatabase db, PechkaBackgroundJobOptions jobOptions,
@@ -162,6 +176,8 @@ internal sealed class JobTestHost : IAsyncDisposable
         services.AddBackgroundJobs<TestDbManager>(configureJobs);
         services.AddBackgroundJob<TestJob, TestJobHandler>();
         services.AddBackgroundJob<RetryableTestJob, RetryableTestJobHandler>(retryTransientFailures: true);
+        services.AddBackgroundJob<ExpiringTestJob, ExpiringTestJobHandler>(
+            expiration: TimeSpan.FromMinutes(5));
 
         var provider = services.BuildServiceProvider();
         return new JobTestHost(provider, db, provider.GetRequiredService<PechkaBackgroundJobOptions>(),
@@ -185,7 +201,8 @@ internal sealed class JobTestHost : IAsyncDisposable
         return await ctx.GetTable<PechkaJobRow>().FirstAsync(x => x.Id == id);
     }
 
-    public async Task<long> InsertRawJob(string type, string? payload = null, int state = JobState.Pending)
+    public async Task<long> InsertRawJob(string type, string? payload = null, int state = JobState.Pending,
+        DateTime? expiresAt = null, DateTime? finishedAt = null)
     {
         await using var ctx = Db.CreateContext();
         return await ctx.InsertWithInt64IdentityAsync(new PechkaJobRow
@@ -193,7 +210,9 @@ internal sealed class JobTestHost : IAsyncDisposable
             Type = type,
             Payload = payload,
             State = state,
-            CreatedAt = JobTime.UtcNow
+            CreatedAt = JobTime.UtcNow,
+            ExpiresAt = expiresAt,
+            FinishedAt = finishedAt
         });
     }
 

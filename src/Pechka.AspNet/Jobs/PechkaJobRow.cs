@@ -31,6 +31,9 @@ internal class PechkaJobRow
     public DateTime? FinishedAt { get; set; }
 
     [Column]
+    public DateTime? ExpiresAt { get; set; }
+
+    [Column]
     public string? Error { get; set; }
 }
 

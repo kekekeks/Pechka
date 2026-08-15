@@ -78,7 +78,7 @@ public class JobPollerTests : SqliteTestBase
     }
 
     [Fact]
-    public async Task Unknown_Job_Type_Is_Failed()
+    public async Task Unknown_Job_Type_Is_Left_Pending_For_A_Node_That_Knows_It()
     {
         await using var host = JobTestHost.Create(Db);
         var id = await host.InsertRawJob("Some.Unregistered.Job");
@@ -86,8 +86,23 @@ public class JobPollerTests : SqliteTestBase
         await host.Drain();
 
         var job = await host.Job(id);
-        Assert.Equal(JobState.Failed, job.State);
-        Assert.Contains("No handler registered", job.Error);
+        Assert.Equal(JobState.Pending, job.State);
+        Assert.Equal(0, job.Attempts);
+        Assert.Null(job.Error);
+    }
+
+    [Fact]
+    public async Task An_Earlier_Unknown_Job_Does_Not_Block_Later_Known_Jobs()
+    {
+        await using var host = JobTestHost.Create(Db);
+        var unknownId = await host.InsertRawJob("Some.Unregistered.Job");
+        await host.InsertRawJob(JobType, Payload("a"));
+
+        var dispatcher = (IBackgroundJobDispatcher)host.Poller;
+        Assert.Equal(1, await dispatcher.RunPendingJobsAsync());
+
+        Assert.Equal(new[] { "a" }, host.Log.Executed);
+        Assert.Equal(JobState.Pending, (await host.Job(unknownId)).State);
     }
 
     [Fact]

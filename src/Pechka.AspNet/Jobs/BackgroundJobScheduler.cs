@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using LinqToDB;
 using Newtonsoft.Json;
@@ -20,15 +21,17 @@ internal sealed class BackgroundJobScheduler<TContextManager> : IBackgroundJobSc
         _poller = poller;
     }
 
-    public async Task<long> Enqueue<TJob>(TJob job)
+    public async Task<long> Enqueue<TJob>(TJob job, TimeSpan? expiresIn = null)
     {
         var registration = _registry.GetByJobType(typeof(TJob));
+        var expiration = expiresIn ?? registration.Expiration;
         var row = new PechkaJobRow
         {
             Type = registration.Identifier,
             Payload = JsonConvert.SerializeObject(job),
             State = JobState.Pending,
-            CreatedAt = JobTime.UtcNow
+            CreatedAt = JobTime.UtcNow,
+            ExpiresAt = expiration == null ? null : JobTime.UtcNow + expiration
         };
         var id = await _manager.ExecUntypedAsync(dc => dc.InsertWithInt64IdentityAsync(row));
         // Wake the poller once the row is actually visible to it

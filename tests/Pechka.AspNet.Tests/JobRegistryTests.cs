@@ -17,6 +17,16 @@ public class JobRegistryTests
         Assert.Equal(typeof(TestJob).FullName, registration.Identifier);
         Assert.Equal(typeof(TestJob), registration.JobType);
         Assert.False(registration.RetryTransientFailures);
+        Assert.Null(registration.Expiration);
+    }
+
+    [Fact]
+    public void Registration_Stores_The_Default_Expiration()
+    {
+        var services = new ServiceCollection();
+        services.AddBackgroundJob<TestJob, TestJobHandler>(expiration: TimeSpan.FromMinutes(7));
+        var registration = services.BuildServiceProvider().GetRequiredService<BackgroundJobRegistration>();
+        Assert.Equal(TimeSpan.FromMinutes(7), registration.Expiration);
     }
 
     [Fact]
@@ -36,6 +46,16 @@ public class JobRegistryTests
         var registry = Registry(registration);
         Assert.Same(registration, registry.TryGetByIdentifier("id"));
         Assert.Same(registration, registry.GetByJobType(typeof(TestJob)));
+    }
+
+    [Fact]
+    public void KnownIdentifiers_Lists_Every_Registration()
+    {
+        var registry = Registry(
+            new BackgroundJobRegistration<TestJob, TestJobHandler>(typeof(TestJob).FullName!, false),
+            new BackgroundJobRegistration<RetryableTestJob, RetryableTestJobHandler>("custom-id", true));
+        Assert.Equal(new[] { typeof(TestJob).FullName!, "custom-id" }.OrderBy(x => x),
+            registry.KnownIdentifiers.OrderBy(x => x));
     }
 
     [Fact]
