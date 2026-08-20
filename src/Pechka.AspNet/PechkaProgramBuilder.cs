@@ -55,9 +55,15 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
 
     private void ResolveHost(string[] args)
     {
-        var runningFromSources = File.Exists(Path.Combine("obj", "project.assets.json"));
-        var appDirectory = runningFromSources ? Directory.GetCurrentDirectory() : AppDomain.CurrentDomain.BaseDirectory;
-        var cmdLineConfig =  new ConfigurationBuilder().AddCommandLine(args).Build();;
+        var cmdLineConfig =  new ConfigurationBuilder().AddCommandLine(args).Build();
+        // --contentRoot lets another process (e.g. a test harness) run the app against its source
+        // directory: config.defaults.json, web app paths and from-source detection resolve there
+        var appDirectory = cmdLineConfig["contentRoot"] is { } contentRoot
+            ? Path.GetFullPath(contentRoot)
+            : File.Exists(Path.Combine("obj", "project.assets.json"))
+                ? Directory.GetCurrentDirectory()
+                : AppDomain.CurrentDomain.BaseDirectory;
+        var runningFromSources = File.Exists(Path.Combine(appDirectory, "obj", "project.assets.json"));
         var appAssembly = typeof(TAssembly).Assembly;
 
         var builder = _host
@@ -138,7 +144,7 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
 
     public IPechkaProgramBuilderExecutable CustomizeHost(Action<IHostBuilder, IConfiguration> f)
     {
-        _customization = f;
+        _customization += f;
         return this;
     }
 
