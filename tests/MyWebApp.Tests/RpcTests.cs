@@ -40,6 +40,22 @@ public class RpcTests : IClassFixture<TestEnv>
     }
 
     [Fact]
+    public void CallSync_Blocks_And_Stays_Sequential()
+    {
+        using var rpc = _env.CreateRpcSession();
+        var first = TestData.Unique("sync-first");
+        var second = TestData.Unique("sync-second");
+
+        // No awaits: each call completes before the next starts
+        var id = rpc.CallSync((TodoRpc r) => r.AddPair(first, second));
+        var names = rpc.CallSync((TodoRpc r) => r.List()).Select(x => x.Name).ToList();
+
+        Assert.True(id > 0);
+        Assert.Contains(first, names);
+        Assert.Contains(second, names);
+    }
+
+    [Fact]
     public async Task Transient_Failures_Are_Retried_Within_The_Request_Boundary()
     {
         using var rpc = _env.CreateRpcSession();
