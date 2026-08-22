@@ -1,0 +1,8 @@
+<!-- Stops NuGet's upward Directory.Packages.props search at the Pechka repo root: a consuming
+     repo enabling central package management must not impose it on these projects, which carry
+     inline PackageReference versions. -->
+<Project>
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+</Project>

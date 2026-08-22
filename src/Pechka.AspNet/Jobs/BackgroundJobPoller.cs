@@ -32,6 +32,7 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
     private readonly BackgroundJobRegistry _registry;
     private readonly PechkaBackgroundJobOptions _options;
     private readonly PechkaDbTransactionOptions _txOptions;
+    private readonly TimeProvider _time;
     private readonly ILogger _logger;
     private readonly Task _databaseReady;
 
@@ -42,6 +43,7 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
         _registry = registry;
         _options = options;
         _txOptions = serviceProvider.GetService<PechkaDbTransactionOptions>() ?? new PechkaDbTransactionOptions();
+        _time = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
         _databaseReady = serviceProvider.GetService<DatabaseReadySignal>()?.Ready ?? Task.CompletedTask;
         _logger = loggerFactory.CreateLogger(GetType());
         Interval = options.PollingInterval;
@@ -69,7 +71,7 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
             // during a rolling deploy) are left Pending for a node that has the handler;
             // expired jobs are left for the maintenance sweep to fail
             var known = _registry.KnownIdentifiers;
-            var now = JobTime.UtcNow;
+            var now = JobTime.From(_time);
             var row = await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
                 .Where(x => x.State == JobState.Pending && known.Contains(x.Type)
                             && (x.ExpiresAt == null || x.ExpiresAt > now))
@@ -82,7 +84,7 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
             var claimed = await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
                 .Where(x => x.Id == row.Id && x.State == JobState.Pending)
                 .Set(x => x.State, JobState.Running)
-                .Set(x => x.TakenAt, JobTime.UtcNow)
+                .Set(x => x.TakenAt, JobTime.From(_time))
                 .Set(x => x.Attempts, x => x.Attempts + 1)
                 .UpdateAsync(token));
             if (claimed == 0)
@@ -114,7 +116,7 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
             await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
                 .Where(x => x.Id == row.Id)
                 .Set(x => x.State, JobState.Completed)
-                .Set(x => x.FinishedAt, JobTime.UtcNow)
+                .Set(x => x.FinishedAt, JobTime.From(_time))
                 .UpdateAsync(token));
             await scopes.CommitAsync();
             return null;
@@ -155,7 +157,7 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
         => manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()
             .Where(x => x.Id == id)
             .Set(x => x.State, JobState.Failed)
-            .Set(x => x.FinishedAt, JobTime.UtcNow)
+            .Set(x => x.FinishedAt, JobTime.From(_time))
             .Set(x => x.Error, error)
             .UpdateAsync(CancellationToken.None));
 
@@ -163,7 +165,7 @@ internal sealed class BackgroundJobPoller<TContextManager> : TickingServiceWorke
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var manager = scope.ServiceProvider.GetRequiredService<TContextManager>();
-        var now = JobTime.UtcNow;
+        var now = JobTime.From(_time);
 
         // Each write is guarded by an existence check so an idle maintenance pass stays read-only
         if (await manager.ExecUntypedAsync(dc => dc.GetTable<PechkaJobRow>()

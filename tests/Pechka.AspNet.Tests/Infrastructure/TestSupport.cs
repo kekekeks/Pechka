@@ -95,6 +95,14 @@ public sealed class FakeApplicationLifetime : IHostApplicationLifetime
     public void StopApplication() => _stopping.Cancel();
 }
 
+/// <summary>Calendar-clock fake: real UTC plus a mutable forward offset.</summary>
+public sealed class TestClock : TimeProvider
+{
+    public TimeSpan Offset { get; set; }
+
+    public override DateTimeOffset GetUtcNow() => DateTimeOffset.UtcNow + Offset;
+}
+
 public static class Poll
 {
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
@@ -102,10 +110,10 @@ public static class Poll
     /// <summary>Waits for a condition instead of sleeping a fixed amount, so tests stay fast and stable.</summary>
     public static async Task Until(Func<bool> condition, string description, TimeSpan? timeout = null)
     {
-        var deadline = DateTime.UtcNow + (timeout ?? DefaultTimeout);
+        var start = System.Diagnostics.Stopwatch.GetTimestamp();
         while (!condition())
         {
-            if (DateTime.UtcNow > deadline)
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(start) > (timeout ?? DefaultTimeout))
                 throw new TimeoutException($"Timed out waiting for: {description}");
             await Task.Delay(5);
         }

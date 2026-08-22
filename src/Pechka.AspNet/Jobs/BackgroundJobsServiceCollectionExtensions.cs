@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Pechka.AspNet.BackgroundServices;
 using Pechka.AspNet.Database;
 
@@ -26,6 +27,8 @@ public static class BackgroundJobsServiceCollectionExtensions
         {
             options = new PechkaBackgroundJobOptions();
             services.AddSingleton(options);
+            // Job timestamps are calendar data and follow the app's TimeProvider
+            services.TryAddSingleton(TimeProvider.System);
             services.AddSingleton<BackgroundJobRegistry>();
             services.AddScoped<IBackgroundJobScheduler, BackgroundJobScheduler<TContextManager>>();
             services.AddSingleton<BackgroundJobPoller<TContextManager>>();

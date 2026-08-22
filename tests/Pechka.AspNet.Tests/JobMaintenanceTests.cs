@@ -82,6 +82,40 @@ public class JobMaintenanceTests : SqliteTestBase
     }
 
     [Fact]
+    public async Task Enqueue_Stamps_Times_From_The_Registered_TimeProvider()
+    {
+        var clock = new TestClock { Offset = TimeSpan.FromDays(1) };
+        await using var host = JobTestHost.Create(Db, timeProvider: clock);
+        await using var scope = host.Services.CreateAsyncScope();
+        var id = await scope.ServiceProvider.GetRequiredService<IBackgroundJobScheduler>()
+            .Enqueue(new ExpiringTestJob { Name = "a" });
+
+        var job = await host.Job(id);
+        var expectedNow = JobTime.UtcNow + TimeSpan.FromDays(1);
+        Assert.InRange(job.CreatedAt, expectedNow - TimeSpan.FromMinutes(1), expectedNow + TimeSpan.FromMinutes(1));
+        Assert.InRange(job.ExpiresAt!.Value,
+            expectedNow + TimeSpan.FromMinutes(4), expectedNow + TimeSpan.FromMinutes(6));
+    }
+
+    [Fact]
+    public async Task Advancing_The_Clock_Expires_A_Pending_Job()
+    {
+        var clock = new TestClock();
+        await using var host = JobTestHost.Create(Db, timeProvider: clock);
+        await using var scope = host.Services.CreateAsyncScope();
+        var id = await scope.ServiceProvider.GetRequiredService<IBackgroundJobScheduler>()
+            .Enqueue(new ExpiringTestJob { Name = "late" }); // 5-minute type default
+
+        clock.Offset += TimeSpan.FromMinutes(10);
+        await host.Drain();
+
+        Assert.Empty(host.Log.Executed);
+        var job = await host.Job(id);
+        Assert.Equal(JobState.Failed, job.State);
+        Assert.Equal("Job expired before execution", job.Error);
+    }
+
+    [Fact]
     public async Task Stale_Terminal_Rows_Are_Purged_But_Pending_And_Running_Survive()
     {
         await using var host = JobTestHost.Create(Db,

@@ -12,26 +12,29 @@ internal sealed class BackgroundJobScheduler<TContextManager> : IBackgroundJobSc
     private readonly TContextManager _manager;
     private readonly BackgroundJobRegistry _registry;
     private readonly BackgroundJobPoller<TContextManager> _poller;
+    private readonly TimeProvider _time;
 
     public BackgroundJobScheduler(TContextManager manager, BackgroundJobRegistry registry,
-        BackgroundJobPoller<TContextManager> poller)
+        BackgroundJobPoller<TContextManager> poller, TimeProvider time)
     {
         _manager = manager;
         _registry = registry;
         _poller = poller;
+        _time = time;
     }
 
     public async Task<long> Enqueue<TJob>(TJob job, TimeSpan? expiresIn = null)
     {
         var registration = _registry.GetByJobType(typeof(TJob));
         var expiration = expiresIn ?? registration.Expiration;
+        var now = JobTime.From(_time);
         var row = new PechkaJobRow
         {
             Type = registration.Identifier,
             Payload = JsonConvert.SerializeObject(job),
             State = JobState.Pending,
-            CreatedAt = JobTime.UtcNow,
-            ExpiresAt = expiration == null ? null : JobTime.UtcNow + expiration
+            CreatedAt = now,
+            ExpiresAt = expiration == null ? null : now + expiration
         };
         var id = await _manager.ExecUntypedAsync(dc => dc.InsertWithInt64IdentityAsync(row));
         // Wake the poller once the row is actually visible to it

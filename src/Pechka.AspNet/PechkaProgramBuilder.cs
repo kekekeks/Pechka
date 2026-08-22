@@ -99,6 +99,8 @@ public class PechkaProgramBuilder<TAssembly> : IPechkaProgramBuilderMain, IPechk
             
             
             var pechkaConfig = _customServicesConfigure(ctx.Configuration, services);
+            // The app's calendar clock; after the app delegate so an app-supplied provider wins
+            services.TryAddSingleton(TimeProvider.System);
             services.AddSingleton(pechkaConfig);
             var pechkaJsonConfig = ctx.Configuration.GetSection("Pechka").Get<PechkaJsonConfig>();
             new ServiceRunnerRegistry(appAssembly).Register(services);

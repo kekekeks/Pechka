@@ -50,4 +50,9 @@ internal static class JobTime
     // Values are UTC, but stored in plain timestamp columns which Npgsql refuses to
     // accept with DateTimeKind.Utc
     public static DateTime UtcNow => DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+
+    /// <summary>The provider's UTC instant as an Unspecified-kind DateTime (plain "timestamp"
+    /// columns reject Utc-kind values under Npgsql).</summary>
+    public static DateTime From(TimeProvider time) =>
+        DateTime.SpecifyKind(time.GetUtcNow().UtcDateTime, DateTimeKind.Unspecified);
 }

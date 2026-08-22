@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -11,21 +12,24 @@ namespace Pechka.AspNet.Database;
 /// <summary>
 /// Process-global sliding-window retry budget. Each retry (not first attempt) consumes one slot;
 /// when the window is full, operations fail fast instead of retrying, so a systemic failure
-/// isn't amplified by retry storms.
+/// isn't amplified by retry storms. The window is measured monotonically (Stopwatch ticks), not
+/// on the calendar clock: it's pure infra rate limiting, so it stays immune to wall-clock steps
+/// and to test-harness time travel.
 /// </summary>
 internal sealed class RetryBudget
 {
     private readonly PechkaDbTransactionOptions _options;
-    private readonly Queue<DateTime> _retries = new();
+    private readonly Queue<long> _retries = new();
 
     public RetryBudget(PechkaDbTransactionOptions options) => _options = options;
 
     public bool TryConsume()
     {
-        var now = DateTime.UtcNow;
+        var now = Stopwatch.GetTimestamp();
+        var window = (long)(_options.RetryBudgetWindow.TotalSeconds * Stopwatch.Frequency);
         lock (_retries)
         {
-            while (_retries.Count > 0 && now - _retries.Peek() > _options.RetryBudgetWindow)
+            while (_retries.Count > 0 && now - _retries.Peek() > window)
                 _retries.Dequeue();
             if (_retries.Count >= _options.RetryBudgetMaxRetries)
                 return false;

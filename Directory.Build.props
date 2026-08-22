@@ -1,0 +1,5 @@
+<!-- Stops MSBuild's upward Directory.Build.props search at the Pechka repo root: when Pechka is
+     vendored as a submodule, the consuming repo's build customizations must not leak into these
+     projects. Shared Pechka-wide properties belong here. -->
+<Project>
+</Project>

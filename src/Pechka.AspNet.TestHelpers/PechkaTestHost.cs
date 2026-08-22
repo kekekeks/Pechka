@@ -55,6 +55,13 @@ public sealed class PechkaTestHost : IAsyncDisposable
         await action(scope.ServiceProvider);
     }
 
+    /// <summary>This host's forward-only travel clock (see <see cref="PechkaTestClock"/>).
+    /// Throws when the app's composition supplies its own TimeProvider.</summary>
+    public PechkaTestClock Clock =>
+        Host.Services.GetService<PechkaTestClock>()
+        ?? throw new InvalidOperationException(
+            "This host has no PechkaTestClock: the app's composition registered its own TimeProvider.");
+
     /// <summary>A fresh cookie-jar RPC client — one logical browser session.</summary>
     public RpcSession CreateRpcSession() => App.CreateRpcSession(BaseUrl);
 
@@ -113,6 +120,7 @@ public sealed class PechkaTestHost : IAsyncDisposable
             {
                 services.DisablePechkaBackgroundAutoStart();
                 ForceDisableTsApiGeneration(services);
+                InstallTestClock(services);
                 app.ConfigureServices(services);
                 configureServices?.Invoke(services);
             }));
@@ -141,6 +149,18 @@ public sealed class PechkaTestHost : IAsyncDisposable
             }
             return (null, failure);
         }
+    }
+
+    /// <summary>Every harness host gets its own <see cref="PechkaTestClock"/> in place of the
+    /// framework's TimeProvider.System default; an app-supplied provider (anything other than
+    /// that default) is left alone. Runs before the app/caller harness delegates, so they can
+    /// still <see cref="PechkaTestClockServiceCollectionExtensions.UseTestClock"/> a shared or
+    /// pre-advanced clock instance.</summary>
+    private static void InstallTestClock(IServiceCollection services)
+    {
+        var descriptor = services.LastOrDefault(d => d.ServiceType == typeof(TimeProvider));
+        if (ReferenceEquals(descriptor?.ImplementationInstance, TimeProvider.System))
+            services.UseTestClock(new PechkaTestClock());
     }
 
     /// <summary>Many test hosts run from source against one app directory; the generated api.ts

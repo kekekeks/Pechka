@@ -9,14 +9,6 @@ namespace MyWebApp.Tests;
 
 public class BackgroundJobTests : IClassFixture<TestEnv>
 {
-    [Table("BackgroundJobs")]
-    private class JobRow
-    {
-        [PrimaryKey] public long Id { get; set; }
-        [Column] public int State { get; set; }
-        [Column] public string? Error { get; set; }
-    }
-
     private readonly TestEnv _env;
 
     public BackgroundJobTests(TestEnv env) => _env = env;

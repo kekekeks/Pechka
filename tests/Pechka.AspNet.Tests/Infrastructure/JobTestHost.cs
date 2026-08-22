@@ -149,10 +149,14 @@ internal sealed class JobTestHost : IAsyncDisposable
 
     public static JobTestHost Create(SqliteTestDatabase db, bool databaseReady = true,
         Action<PechkaBackgroundJobOptions>? configureJobs = null,
-        Action<PechkaDbTransactionOptions>? configureTx = null)
+        Action<PechkaDbTransactionOptions>? configureTx = null,
+        TimeProvider? timeProvider = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        // Before AddBackgroundJobs, whose TryAdd of TimeProvider.System then defers to it
+        if (timeProvider != null)
+            services.AddSingleton(timeProvider);
         services.AddScoped(_ => db.CreateManager());
         services.AddScoped<ITransactionalDbContextManager>(sp => sp.GetRequiredService<TestDbManager>());
 

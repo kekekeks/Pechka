@@ -56,25 +56,29 @@ public class RpcSession : IDisposable
     public Task Call<TRpc>(Expression<Func<TRpc, Task>> call) =>
         InvokeAsync(typeof(TRpc), call.Body, CreateSerializer());
 
-    /// <summary>Blocking counterpart of <see cref="Call{TRpc,T}"/>: sequential by construction,
-    /// so ported sync-style arrangement code cannot silently race. Blocking is safe here — the
-    /// host runs in-process on a real Kestrel port, so there is no sync-context deadlock.</summary>
-    public T CallSync<TRpc, T>(Expression<Func<TRpc, Task<T>>> call) =>
-        Call(call).GetAwaiter().GetResult();
+    /// <summary>Truly synchronous counterpart of <see cref="Call{TRpc,T}"/> (the sync
+    /// HttpClient.Send path, no task machinery anywhere): sequential by construction, so ported
+    /// sync-style arrangement code cannot silently race. Blocking is safe here — the host runs
+    /// in-process on a real Kestrel port, so there is no sync-context deadlock.</summary>
+    public T CallSync<TRpc, T>(Expression<Func<TRpc, Task<T>>> call)
+    {
+        var serializer = CreateSerializer();
+        var result = Invoke(typeof(TRpc), call.Body, serializer);
+        return (T)Decode(result, typeof(T), serializer)!;
+    }
 
     /// <inheritdoc cref="CallSync{TRpc,T}"/>
     public void CallSync<TRpc>(Expression<Func<TRpc, Task>> call) =>
-        Call(call).GetAwaiter().GetResult();
+        Invoke(typeof(TRpc), call.Body, CreateSerializer());
 
     /// <summary>Issues one expression-bound call while preserving the raw HTTP response — for
     /// tests whose contract is the status or headers rather than the decoded result.</summary>
-    public Task<HttpResponseMessage> CallRaw<TRpc>(Expression<Func<TRpc, object?>> call)
-    {
-        var body = call.Body is UnaryExpression { NodeType: ExpressionType.Convert } convert
-            ? convert.Operand
-            : call.Body;
-        return PostEnvelopeAsync(BuildEnvelope(typeof(TRpc), body, CreateSerializer()));
-    }
+    public Task<HttpResponseMessage> CallRaw<TRpc>(Expression<Func<TRpc, object?>> call) =>
+        Http.SendAsync(CreateRequest(BuildEnvelope(typeof(TRpc), UnwrapConvert(call.Body), CreateSerializer())));
+
+    /// <inheritdoc cref="CallRaw{TRpc}"/>
+    public HttpResponseMessage CallRawSync<TRpc>(Expression<Func<TRpc, object?>> call) =>
+        Http.Send(CreateRequest(BuildEnvelope(typeof(TRpc), UnwrapConvert(call.Body), CreateSerializer())));
 
     /// <summary>A plain GET probe through this session's cookie jar.</summary>
     public Task<HttpResponseMessage> GetAsync(string relativePath) => Http.GetAsync(relativePath);
@@ -107,8 +111,20 @@ public class RpcSession : IDisposable
 
     private async Task<JToken> InvokeAsync(Type rpcType, Expression body, JsonSerializer serializer)
     {
-        using var response = await PostEnvelopeAsync(BuildEnvelope(rpcType, body, serializer));
-        var responseBody = await response.Content.ReadAsStringAsync();
+        using var response = await Http.SendAsync(
+            CreateRequest(BuildEnvelope(rpcType, body, serializer)));
+        return ExtractResult(response, await response.Content.ReadAsStringAsync());
+    }
+
+    private JToken Invoke(Type rpcType, Expression body, JsonSerializer serializer)
+    {
+        using var response = Http.Send(CreateRequest(BuildEnvelope(rpcType, body, serializer)));
+        using var bodyReader = new StreamReader(response.Content.ReadAsStream());
+        return ExtractResult(response, bodyReader.ReadToEnd());
+    }
+
+    private static JToken ExtractResult(HttpResponseMessage response, string responseBody)
+    {
         if (!response.IsSuccessStatusCode)
             throw new RpcTransportException(response.StatusCode, responseBody);
 
@@ -121,6 +137,12 @@ public class RpcSession : IDisposable
             throw new RpcServerException(exception.ToString());
         return parsed["Result"] ?? JValue.CreateNull();
     }
+
+    private HttpRequestMessage CreateRequest(JObject envelope) =>
+        new(HttpMethod.Post, _rpcPath) { Content = new StringContent(envelope.ToString(Formatting.None)) };
+
+    private static Expression UnwrapConvert(Expression body) =>
+        body is UnaryExpression { NodeType: ExpressionType.Convert } convert ? convert.Operand : body;
 
     private JObject BuildEnvelope(Type rpcType, Expression body, JsonSerializer serializer)
     {
@@ -136,12 +158,6 @@ public class RpcSession : IDisposable
                     Expression.Convert(a, typeof(object))).Compile().Invoke())
                 .Select(a => a is null ? JValue.CreateNull() : JToken.FromObject(a, serializer)))
         };
-    }
-
-    private async Task<HttpResponseMessage> PostEnvelopeAsync(JObject envelope)
-    {
-        using var content = new StringContent(envelope.ToString(Formatting.None));
-        return await Http.PostAsync(_rpcPath, content);
     }
 
     private static object? Decode(JToken token, Type type, JsonSerializer serializer)

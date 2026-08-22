@@ -41,6 +41,9 @@ public abstract class PechkaTestEnv<TApp> : IAsyncDisposable where TApp : Pechka
     public int Port => Host.Port;
     public string ConnectionString => Host.ConnectionString;
 
+    /// <inheritdoc cref="PechkaTestHost.Clock"/>
+    public PechkaTestClock Clock => Host.Clock;
+
     /// <inheritdoc cref="PechkaTestHost.Resolve{T}"/>
     public T Resolve<T>() where T : notnull => Host.Resolve<T>();
 

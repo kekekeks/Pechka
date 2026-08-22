@@ -30,14 +30,15 @@ public static class RepoRoot
     }
 }
 
-/// <summary>Convergence helper: poll a condition instead of sleeping.</summary>
+/// <summary>Convergence helper: poll a condition instead of sleeping. The timeout is measured
+/// monotonically, unaffected by wall-clock steps or harness time travel.</summary>
 public static class Poll
 {
     public static async Task UntilAsync(Func<Task<bool>> condition, int timeoutSeconds = 30, string? what = null)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+        var start = System.Diagnostics.Stopwatch.GetTimestamp();
         Exception? last = null;
-        while (DateTime.UtcNow < deadline)
+        while (System.Diagnostics.Stopwatch.GetElapsedTime(start) < TimeSpan.FromSeconds(timeoutSeconds))
         {
             try
             {

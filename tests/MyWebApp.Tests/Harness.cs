@@ -39,6 +39,16 @@ public static class TestData
     public static string Unique(string prefix) => $"{prefix}-{Guid.NewGuid():N}";
 }
 
+/// <summary>Consumer-side mapping of Pechka's job table for state assertions (the supported
+/// triage surface is SQL).</summary>
+[LinqToDB.Mapping.Table("BackgroundJobs")]
+public class JobRow
+{
+    [LinqToDB.Mapping.PrimaryKey] public long Id { get; set; }
+    [LinqToDB.Mapping.Column] public int State { get; set; }
+    [LinqToDB.Mapping.Column] public string? Error { get; set; }
+}
+
 /// <summary>A job type that must never exist in production — registered per host through the
 /// harness services seam.</summary>
 public class ProbeJob
